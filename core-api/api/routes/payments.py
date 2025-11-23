@@ -8,11 +8,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from app.core.db import get_session
-from app.models import Venta, DetalleVenta
-from app.services.payment_service import payment_service
-from app.services.afip_service import afip_service
-from app.api.deps import CurrentTienda
+from core.db import get_session
+from models import Venta, DetalleVenta
+from services.payment_service import payment_service
+from services.afip_service import afip_service
+from api.deps import CurrentTienda
 from datetime import datetime
 
 

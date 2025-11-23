@@ -4,8 +4,8 @@ Validaciones complejas reutilizables para lógica de negocio
 """
 from typing import List, Optional, Tuple
 from decimal import Decimal
-from app.models import Producto, Venta
-from app.core.exceptions import (
+from models import Producto, Venta
+from core.exceptions import (
     StockInsuficienteException,
     ProductoNoEncontradoException,
     VentaInvalidaException

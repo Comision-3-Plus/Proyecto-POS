@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlmodel import col
-from app.core.db import get_session
-from app.models import Insight
-from app.services.insight_service import insight_service
-from app.api.deps import CurrentTienda
+from core.db import get_session
+from models import Insight
+from services.insight_service import insight_service
+from api.deps import CurrentTienda
 from pydantic import BaseModel
 from datetime import datetime
 

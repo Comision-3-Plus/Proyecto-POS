@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from sqlmodel import col
-from app.models import Insight, Producto, Venta
+from models import Insight, Producto, Venta
 
 
 logger = logging.getLogger(__name__)

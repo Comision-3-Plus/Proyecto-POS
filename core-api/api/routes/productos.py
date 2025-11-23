@@ -7,17 +7,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, col, and_, or_, func
-from app.core.db import get_session
-from app.core.cache import invalidate_cache
+from core.db import get_session
+from core.cache import invalidate_cache
 import logging
-from app.models import Producto, Tienda
-from app.schemas_models.productos import (
+from models import Producto, Tienda
+from schemas_models.productos import (
     ProductoCreate,
     ProductoUpdate,
     ProductoRead,
     ProductoReadWithCalculatedStock
 )
-from app.api.deps import CurrentTienda
+from api.deps import CurrentTienda
 
 
 router = APIRouter(prefix="/productos", tags=["Productos"])

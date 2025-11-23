@@ -6,8 +6,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from app.core.db import get_session
-from app.api.deps import CurrentUser, CurrentTienda
+from core.db import get_session
+from api.deps import CurrentUser, CurrentTienda
 
 
 router = APIRouter(prefix="/tiendas", tags=["Tiendas"])

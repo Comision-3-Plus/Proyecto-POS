@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional
 from uuid import UUID
 import mercadopago
-from app.core.config import settings
+from core.config import settings
 
 
 logger = logging.getLogger(__name__)

@@ -10,8 +10,8 @@ from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from app.core.db import get_session, engine
-from app.core.config import settings
+from core.db import get_session, engine
+from core.config import settings
 
 
 logger = logging.getLogger(__name__)

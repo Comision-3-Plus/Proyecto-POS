@@ -14,8 +14,8 @@ from pathlib import Path
 # Agregar el directorio raíz al path para importar los modelos
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.config import settings
-from app.models import SQLModel
+from core.config import settings
+from models import SQLModel
 
 # Configuración de Alembic
 config = context.config

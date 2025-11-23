@@ -81,11 +81,8 @@ services:
       # Integraciones
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
       AFIP_PRODUCTION: "False"
-    volumes:
-      - ./core-api/app:/app/app
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
     networks:
       - super_network
 

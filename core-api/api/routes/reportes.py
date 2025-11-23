@@ -9,9 +9,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
-from app.core.db import get_session
-from app.models import Venta, DetalleVenta, Producto
-from app.api.deps import CurrentTienda
+from core.db import get_session
+from models import Venta, DetalleVenta, Producto
+from api.deps import CurrentTienda
 from pydantic import BaseModel, Field
 
 

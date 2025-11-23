@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from pydantic import BaseModel, EmailStr
-from app.core.db import get_session
-from app.api.deps import get_current_user
-from app.models import User, Tienda
-from app.core.security import get_password_hash
+from core.db import get_session
+from api.deps import get_current_user
+from models import User, Tienda
+from core.security import get_password_hash
 import uuid
 
 router = APIRouter()

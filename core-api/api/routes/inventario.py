@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from pydantic import BaseModel, Field
-from app.core.db import get_session
-from app.models import Producto
-from app.api.deps import CurrentTienda, CurrentUser
-from app.core.logging_config import log_audit
+from core.db import get_session
+from models import Producto
+from api.deps import CurrentTienda, CurrentUser
+from core.logging_config import log_audit
 
 
 logger = logging.getLogger(__name__)

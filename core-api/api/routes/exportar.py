@@ -11,9 +11,9 @@ from sqlalchemy import select, func, and_, desc
 import io
 import csv
 
-from app.core.db import get_session
-from app.models import Producto, Venta, DetalleVenta
-from app.api.deps import CurrentTienda
+from core.db import get_session
+from models import Producto, Venta, DetalleVenta
+from api.deps import CurrentTienda
 
 router = APIRouter(prefix="/exportar", tags=["Exportación"])
 

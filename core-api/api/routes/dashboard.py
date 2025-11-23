@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
 from pydantic import BaseModel
 
-from app.core.db import get_session
+from core.db import get_session
 import logging
-from app.core.cache import cached
-from app.models import Producto, Venta, DetalleVenta
-from app.api.deps import CurrentTienda
+from core.cache import cached
+from models import Producto, Venta, DetalleVenta
+from api.deps import CurrentTienda
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])

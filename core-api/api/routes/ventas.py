@@ -8,12 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlmodel import col
-from app.core.db import get_session
+from core.db import get_session
 # === AGREGADO: Import del Event Bus ===
-from app.core.event_bus import publish_event
+from core.event_bus import publish_event
 # ======================================
-from app.models import Producto, Venta, DetalleVenta
-from app.schemas_models.ventas import (
+from models import Producto, Venta, DetalleVenta
+from schemas_models.ventas import (
     ProductoScanRead,
     VentaCreate,
     VentaRead,
@@ -21,7 +21,7 @@ from app.schemas_models.ventas import (
     VentaResumen,
     DetalleVentaRead
 )
-from app.api.deps import CurrentTienda
+from api.deps import CurrentTienda
 
 
 router = APIRouter(prefix="/ventas", tags=["Ventas"])

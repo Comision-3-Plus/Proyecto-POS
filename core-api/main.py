@@ -9,11 +9,11 @@ from fastapi.middleware.gzip import GZipMiddleware  # ⚡ OPTIMIZACIÓN: Compres
 from fastapi.exceptions import RequestValidationError, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from contextlib import asynccontextmanager
-from app.core.config import settings
-from app.core.db import init_db
-from app.core.logging_config import setup_logging
-from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.core.exceptions import (
+from core.config import settings
+from core.db import init_db
+from core.logging_config import setup_logging
+from core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
+from core.exceptions import (
     NexusPOSException,
     nexus_exception_handler,
     http_exception_handler,
@@ -21,7 +21,7 @@ from app.core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from app.api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas
+from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas
 
 
 @asynccontextmanager

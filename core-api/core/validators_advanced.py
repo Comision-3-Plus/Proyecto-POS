@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from fastapi import HTTPException, status
 
-from app.models import Producto, Venta, DetalleVenta
+from models import Producto, Venta, DetalleVenta
 
 
 class StockValidator:

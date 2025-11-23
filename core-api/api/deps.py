@@ -9,10 +9,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from app.core.config import settings
-from app.core.db import get_session
-from app.models import User, Tienda
-from app.schemas import TokenData
+from core.config import settings
+from core.db import get_session
+from models import User, Tienda
+from schemas import TokenData
 
 
 # OAuth2 scheme para extraer el token del header Authorization

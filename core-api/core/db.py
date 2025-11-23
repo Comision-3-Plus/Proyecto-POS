@@ -5,7 +5,7 @@ Engine y Session Factory para SQLModel
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlmodel import SQLModel
-from app.core.config import settings
+from core.config import settings
 
 
 # Motor asíncrono de SQLAlchemy
