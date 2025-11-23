@@ -1,0 +1,78 @@
+# ================================
+# GLOBAL - Proyecto POS NEXUS
+# ================================
+# Este .gitignore raíz cubre elementos comunes
+# Los subdirectorios POS/ y stock-in-order-master/ tienen sus propios .gitignore
+
+# ================================
+# ENVIRONMENT & SECRETS
+# ================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+
+# ================================
+# EDITORS & IDEs
+# ================================
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ================================
+# OPERATING SYSTEMS
+# ================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ================================
+# LOGS
+# ================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# ================================
+# BACKUP & TEMPORARY
+# ================================
+*.bak
+*.tmp
+*.temp
+*.old
+*.orig
+
+# ================================
+# GIT
+# ================================
+*.patch
+*.diff

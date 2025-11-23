@@ -1,0 +1,212 @@
+# ================================
+# ENVIRONMENT & SECRETS
+# ================================
+.env
+.env.local
+.env.prod
+.env.production
+.env.development
+.env.test
+.env.*.local
+*.key
+*.pem
+*.crt
+*.p12
+
+# Archivos de configuración sensibles
+secrets.json
+credentials.json
+
+# ================================
+# DOCKER & DATABASE
+# ================================
+# Datos de la base de datos local de Docker
+postgres-data/
+
+# Datos de RabbitMQ local de Docker
+rabbitmq-data/
+
+# Docker override (personalización local)
+docker-compose.override.yml
+
+# ================================
+# BACKEND (Go)
+# ================================
+# Binarios compilados de Go
+backend/api
+backend/api.exe
+backend/*.exe
+backend/main
+backend/worker
+backend/scheduler
+
+# Go test coverage
+backend/coverage.out
+backend/coverage.html
+backend/*.test
+backend/*.prof
+
+# Go vendor dependencies (si se usa)
+backend/vendor/
+
+# Go module cache
+backend/go.sum.bak
+
+# Air (hot reload para Go)
+backend/tmp/
+backend/.air.toml.local
+
+# ================================
+# WORKER & SCHEDULER (Go)
+# ================================
+# Binarios
+worker/worker
+worker/worker.exe
+worker/*.test
+worker/coverage.out
+
+scheduler/scheduler
+scheduler/scheduler.exe
+scheduler/*.test
+scheduler/coverage.out
+
+# ================================
+# FRONTEND (React + Vite)
+# ================================
+# Dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+
+# Production build
+frontend/dist/
+frontend/build/
+frontend/coverage/
+
+# Testing
+frontend/.nyc_output
+
+# Cache
+frontend/.vite/
+frontend/.cache/
+
+# Local env files
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# ================================
+# LOGS
+# ================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ================================
+# EDITORS & IDEs
+# ================================
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# JetBrains IDEs (GoLand, IntelliJ, WebStorm, etc)
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+
+# Emacs
+\#*\#
+.#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ================================
+# OPERATING SYSTEMS
+# ================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ================================
+# MONITORING & DEBUGGING
+# ================================
+# Sentry
+.sentryclirc
+
+# Debug files
+debug.log
+*.dmp
+
+# ================================
+# SCRIPTS & TOOLS
+# ================================
+# Script outputs
+*.out
+scripts/*.log
+
+# SQL dumps
+*.sql.gz
+*.dump
+
+# ================================
+# MISCELLANEOUS
+# ================================
+# Backup files
+*.bak
+*.tmp
+*.temp
+*.old
+*.orig
+
+# Archivos de bloqueo temporales
+*.lock
+!package-lock.json
+!go.sum
+
+# Archivos de sistema
+*.pid
+*.seed
+*.pid.lock
+
+# Patches
+*.patch
+*.diff
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+!docs/**/*.zip
