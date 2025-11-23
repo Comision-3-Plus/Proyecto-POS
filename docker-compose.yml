@@ -1,0 +1,173 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------
+  # 1. BASE DE DATOS (El Corazón - Postgres 17 de Nexus)
+  # ----------------------------------------------------------------
+  db:
+    image: postgres:17-alpine
+    container_name: super_pos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexuspos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexuspos_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus_pos}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexuspos} -d ${POSTGRES_DB:-nexus_pos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 2. MENSAJERÍA (El Cartero - RabbitMQ de Franco)
+  # ----------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: super_pos_rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-pass}
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Dashboard Web
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 3. CORE API (El Cerebro - Tu Python FastAPI)
+  # ----------------------------------------------------------------
+  core_api:
+    build:
+      context: ./core-api
+      dockerfile: Dockerfile
+    container_name: super_pos_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Conexión DB
+      POSTGRES_SERVER: db
+      POSTGRES_USER: ${POSTGRES_USER:-nexuspos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexuspos_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus_pos}
+      POSTGRES_PORT: 5432
+      
+      # Conexión RabbitMQ (Para enviar tareas a Franco)
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
+      
+      # Security & Apps
+      SECRET_KEY: ${SECRET_KEY:-cambiar_esto_en_prod_por_favor}
+      ALGORITHM: HS256
+      BACKEND_CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
+      
+      # Integraciones
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
+      AFIP_PRODUCTION: "False"
+    volumes:
+      - ./core-api/app:/app/app
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 4. WORKER SERVICE (El Músculo - Go de Franco)
+  # ----------------------------------------------------------------
+  worker_go:
+    build:
+      context: ./worker-service # 👈 RUTA AL CÓDIGO DE FRANCO
+    container_name: super_pos_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Go usa Connection String directa
+      # ¡OJO! Conectamos a la misma DB 'nexus_pos' con el user 'nexuspos'
+      DB_DSN: "postgres://${POSTGRES_USER:-nexuspos}:${POSTGRES_PASSWORD:-nexuspos_secret}@db:5432/${POSTGRES_DB:-nexus_pos}?sslmode=disable"
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      ENCRYPTION_KEY: ${SECRET_KEY} # Usamos la misma key para encriptar
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 5. SCHEDULER (El Reloj - Go de Franco)
+  # ----------------------------------------------------------------
+  scheduler_go:
+    build:
+      context: ./scheduler-service
+    container_name: super_pos_scheduler
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 6. FRONTEND (La Cara - Next.js de Lautaro)
+  # ----------------------------------------------------------------
+  frontend:
+    build:
+      context: ./web-portal
+      dockerfile: Dockerfile
+    container_name: super_pos_frontend
+    restart: unless-stopped
+    depends_on:
+      - core_api
+    environment:
+      # El frontend habla con TU API (Python)
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 7. ADMINER (Utilidad DB)
+  # ----------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: super_pos_adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: nette
+    ports:
+      - "8080:8080"
+    networks:
+      - super_network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  super_network:
+    driver: bridge
