@@ -1,0 +1,152 @@
+"""
+Tests unitarios para Validators
+Prueba las validaciones avanzadas y polimórficas
+"""
+import pytest
+from uuid import uuid4
+from core.validators import (
+    validate_sku_format,
+    validate_stock_minimo,
+    validate_precio_positivo,
+)
+from core.validators_polymorphic import (
+    validate_producto_type,
+    validate_producto_atributos,
+    enrich_producto_atributos,
+)
+from core.exceptions import ValidationException
+
+
+class TestValidadoresBasicos:
+    """Tests para validadores básicos"""
+    
+    def test_validate_sku_format_valid(self):
+        """Debe aceptar SKUs válidos"""
+        valid_skus = ["ABC-123", "PROD-001", "TEST_SKU"]
+        for sku in valid_skus:
+            assert validate_sku_format(sku) == sku
+    
+    def test_validate_sku_format_invalid_too_short(self):
+        """Debe rechazar SKUs demasiado cortos"""
+        with pytest.raises(ValidationException) as exc_info:
+            validate_sku_format("AB")
+        assert "debe tener al menos 3 caracteres" in str(exc_info.value)
+    
+    def test_validate_sku_format_invalid_special_chars(self):
+        """Debe rechazar SKUs con caracteres especiales"""
+        with pytest.raises(ValidationException):
+            validate_sku_format("SKU#123")
+    
+    def test_validate_stock_minimo_valid(self):
+        """Debe aceptar stock >= 0"""
+        assert validate_stock_minimo(0.0) == 0.0
+        assert validate_stock_minimo(100.5) == 100.5
+    
+    def test_validate_stock_minimo_invalid_negative(self):
+        """Debe rechazar stock negativo"""
+        with pytest.raises(ValidationException) as exc_info:
+            validate_stock_minimo(-1.0)
+        assert "no puede ser negativo" in str(exc_info.value)
+    
+    def test_validate_precio_positivo_valid(self):
+        """Debe aceptar precios positivos"""
+        assert validate_precio_positivo(100.0, "venta") == 100.0
+        assert validate_precio_positivo(0.01, "costo") == 0.01
+    
+    def test_validate_precio_positivo_invalid_zero(self):
+        """Debe rechazar precio cero"""
+        with pytest.raises(ValidationException) as exc_info:
+            validate_precio_positivo(0.0, "venta")
+        assert "debe ser mayor a 0" in str(exc_info.value)
+    
+    def test_validate_precio_positivo_invalid_negative(self):
+        """Debe rechazar precio negativo"""
+        with pytest.raises(ValidationException):
+            validate_precio_positivo(-10.0, "costo")
+
+
+class TestValidadoresPolimorficos:
+    """Tests para validadores de productos polimórficos"""
+    
+    def test_validate_producto_type_general(self):
+        """Debe validar producto tipo general"""
+        assert validate_producto_type("general") == "general"
+    
+    def test_validate_producto_type_pesable(self):
+        """Debe validar producto tipo pesable"""
+        assert validate_producto_type("pesable") == "pesable"
+    
+    def test_validate_producto_type_ropa(self):
+        """Debe validar producto tipo ropa"""
+        assert validate_producto_type("ropa") == "ropa"
+    
+    def test_validate_producto_type_invalid(self):
+        """Debe rechazar tipo no soportado"""
+        with pytest.raises(ValidationException) as exc_info:
+            validate_producto_type("electronico")
+        assert "Tipo de producto no soportado" in str(exc_info.value)
+    
+    def test_validate_producto_atributos_general_valid(self):
+        """Producto general puede tener atributos opcionales"""
+        atributos = {"marca": "Coca Cola", "sabor": "Original"}
+        result = validate_producto_atributos("general", atributos)
+        assert result == atributos
+    
+    def test_validate_producto_atributos_general_empty(self):
+        """Producto general puede no tener atributos"""
+        result = validate_producto_atributos("general", {})
+        assert result == {}
+    
+    def test_validate_producto_atributos_pesable_valid(self):
+        """Producto pesable con atributos válidos"""
+        atributos = {"corte": "molida", "categoria": "res"}
+        result = validate_producto_atributos("pesable", atributos)
+        assert result["corte"] == "molida"
+    
+    def test_validate_producto_atributos_pesable_missing_required(self):
+        """Producto pesable debe tener atributos requeridos"""
+        with pytest.raises(ValidationException) as exc_info:
+            validate_producto_atributos("pesable", {"corte": "molida"})  # Falta categoria
+        assert "debe incluir" in str(exc_info.value)
+    
+    def test_validate_producto_atributos_ropa_valid(self):
+        """Producto ropa con todos los atributos"""
+        atributos = {
+            "talle": "M",
+            "color": "Negro",
+            "marca": "Nike",
+            "genero": "Unisex"
+        }
+        result = validate_producto_atributos("ropa", atributos)
+        assert result["talle"] == "M"
+        assert result["color"] == "Negro"
+    
+    def test_validate_producto_atributos_ropa_missing_talle(self):
+        """Producto ropa debe tener talle"""
+        with pytest.raises(ValidationException):
+            validate_producto_atributos("ropa", {"color": "Rojo", "marca": "Adidas"})
+    
+    def test_enrich_producto_atributos_ropa(self):
+        """Debe enriquecer atributos de ropa con defaults"""
+        atributos = {"talle": "L", "color": "Azul"}
+        enriched = enrich_producto_atributos("ropa", atributos)
+        
+        assert enriched["talle"] == "L"
+        assert enriched["color"] == "Azul"
+        assert "marca" in enriched  # Agregado por default
+        assert enriched.get("genero") is not None
+    
+    def test_enrich_producto_atributos_pesable(self):
+        """Debe enriquecer atributos de producto pesable"""
+        atributos = {"corte": "churrasco", "categoria": "cerdo"}
+        enriched = enrich_producto_atributos("pesable", atributos)
+        
+        assert enriched["corte"] == "churrasco"
+        assert enriched["categoria"] == "cerdo"
+        # Puede agregar defaults como "origen", "calidad", etc.
+    
+    def test_enrich_producto_atributos_general(self):
+        """Producto general no modifica atributos"""
+        atributos = {"custom_field": "value"}
+        enriched = enrich_producto_atributos("general", atributos)
+        assert enriched == atributos

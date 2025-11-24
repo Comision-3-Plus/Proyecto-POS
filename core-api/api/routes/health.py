@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from core.db import get_session, engine
 from core.config import settings
+from core.circuit_breaker import mercadopago_circuit, afip_circuit
 
 
 logger = logging.getLogger(__name__)
@@ -174,3 +175,64 @@ async def system_metrics():
             "environment": "production" if settings.AFIP_PRODUCTION else "development"
         }
     }
+
+
+@router.get("/circuits")
+async def circuit_breakers_status():
+    """
+    Estado de los Circuit Breakers
+    
+    🛡️ Monitorea la salud de integraciones externas (MercadoPago, AFIP)
+    
+    Estados posibles:
+    - CLOSED: Funcionamiento normal
+    - OPEN: Servicio no disponible, usando fallback
+    - HALF_OPEN: Probando recuperación
+    
+    Returns:
+        Estado de cada circuit breaker con métricas
+    """
+    mercadopago_stats = mercadopago_circuit.get_stats()
+    afip_stats = afip_circuit.get_stats()
+    
+    # Determinar salud general
+    all_healthy = (
+        mercadopago_stats["state"] == "CLOSED" and
+        afip_stats["state"] == "CLOSED"
+    )
+    
+    response_data = {
+        "status": "healthy" if all_healthy else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "circuit_breakers": {
+            "mercadopago": {
+                **mercadopago_stats,
+                "description": "Integración de pagos con MercadoPago",
+                "impact": "Pagos offline si OPEN" if mercadopago_stats["state"] == "OPEN" else None
+            },
+            "afip": {
+                **afip_stats,
+                "description": "Facturación electrónica AFIP",
+                "impact": "CAE temporales si OPEN" if afip_stats["state"] == "OPEN" else None
+            }
+        },
+        "recommendations": []
+    }
+    
+    # Agregar recomendaciones si hay problemas
+    if mercadopago_stats["state"] == "OPEN":
+        response_data["recommendations"].append(
+            "MercadoPago: Verificar conectividad y credenciales. Sistema usando modo offline."
+        )
+    
+    if afip_stats["state"] == "OPEN":
+        response_data["recommendations"].append(
+            "AFIP: Verificar certificados y conectividad. Sistema usando CAE temporales."
+        )
+    
+    status_code = status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    
+    return JSONResponse(
+        status_code=status_code,
+        content=response_data
+    )

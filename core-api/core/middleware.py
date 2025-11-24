@@ -9,6 +9,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+from core.event_bus import set_request_id
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """
     Middleware que agrega un ID único a cada request
     para facilitar el tracking y debugging
+    
+    🔍 TRAZABILIDAD DISTRIBUIDA:
+    - Genera o usa X-Request-ID del header entrante
+    - Propaga el ID al contexto asíncrono (ContextVar)
+    - Retorna el ID en el header de respuesta
+    - Permite rastrear: Frontend → API → RabbitMQ → Worker
     """
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -26,6 +33,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         
         # Agregar request_id al estado del request
         request.state.request_id = request_id
+        
+        # 🆕 PROPAGACIÓN: Establecer en contexto para uso en event_bus
+        set_request_id(request_id)
         
         # Procesar request y agregar header a response
         response = await call_next(request)

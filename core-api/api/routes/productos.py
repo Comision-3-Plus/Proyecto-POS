@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, col, and_, or_, func
 from core.db import get_session
 from core.cache import invalidate_cache
+from core.validators_polymorphic import validar_atributos_producto, validar_stock_segun_tipo
 import logging
 from models import Producto, Tienda
 from schemas_models.productos import (
@@ -49,7 +50,20 @@ async def crear_producto(
     - Asigna automáticamente el tienda_id de la tienda actual
     - Para productos tipo 'ropa', calcula el stock_actual desde las variantes
     - Valida que el SKU no esté duplicado en la tienda
+    - **NUEVO**: Validación polimórfica de atributos según tipo
     """
+    # 🛡️ VALIDACIÓN POLIMÓRFICA: Validar atributos según tipo de producto
+    try:
+        atributos_validados = validar_atributos_producto(
+            tipo=producto_data.tipo,
+            atributos=producto_data.atributos
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    
     # Validar SKU único dentro de la tienda
     statement = select(Producto).where(
         Producto.tienda_id == current_tienda.id,
@@ -67,12 +81,16 @@ async def crear_producto(
     # Crear producto
     producto_dict = producto_data.model_dump()
     producto_dict['tienda_id'] = current_tienda.id
+    producto_dict['atributos'] = atributos_validados  # Usar atributos validados
     
     # Calcular stock automáticamente para productos tipo ropa
     if producto_data.tipo == 'ropa':
-        variantes = producto_data.atributos.get('variantes', [])
+        variantes = atributos_validados.get('variantes', [])
         stock_total = sum(variante.get('stock', 0) for variante in variantes)
         producto_dict['stock_actual'] = float(stock_total)
+    
+    # 🛡️ VALIDACIÓN: Stock coherente con tipo de producto
+    validar_stock_segun_tipo(producto_data.tipo, producto_dict.get('stock_actual', 0))
     
     nuevo_producto = Producto(**producto_dict)
     

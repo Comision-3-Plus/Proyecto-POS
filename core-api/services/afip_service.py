@@ -1,12 +1,15 @@
 """
 Servicio de Facturación AFIP - Nexus POS
 Integración con AFIP para emisión de facturas electrónicas (Mock/Base)
+🛡️ PROTEGIDO: Circuit Breaker para resiliencia ante fallos de AFIP
 """
 import logging
+import time
 from typing import Dict, Any, Optional
 from uuid import UUID
 from datetime import datetime, timedelta
 from core.config import settings
+from core.circuit_breaker import afip_circuit, CircuitBreakerOpenException
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,7 @@ class AfipService:
     ) -> Dict[str, Any]:
         """
         Emite una factura electrónica en AFIP
+        🛡️ PROTEGIDO: Circuit Breaker protege contra fallos de AFIP
         
         ESTADO: MOCK - Simulación
         
@@ -75,6 +79,7 @@ class AfipService:
         
         Returns:
             Dict con CAE (Código de Autorización Electrónica) y fecha de vencimiento
+            En caso de circuit OPEN, retorna CAE temporal para continuar operación
         
         TODO: Implementar la lógica real siguiendo estos pasos:
         
@@ -98,80 +103,116 @@ class AfipService:
         6. Generar PDF con formato legal AFIP
         """
         
-        logger.info(f"[MOCK] Emitiendo factura para venta {venta_id}")
-        logger.info(f"[MOCK] CUIT Cliente: {cuit_cliente or 'Consumidor Final'}")
-        logger.info(f"[MOCK] Tipo: {tipo_comprobante}, Monto: ${monto}")
-        
-        if self.configured and settings.AFIP_PRODUCTION:
-            # TODO: Aquí iría la integración real
-            logger.warning("Configuración de AFIP detectada pero integración no implementada")
+        def _emitir_factura_call():
+            """Llamada protegida a AFIP envuelta en Circuit Breaker"""
+            logger.info(f"[MOCK] Emitiendo factura para venta {venta_id}")
+            logger.info(f"[MOCK] CUIT Cliente: {cuit_cliente or 'Consumidor Final'}")
+            logger.info(f"[MOCK] Tipo: {tipo_comprobante}, Monto: ${monto}")
             
-            """
-            EJEMPLO DE INTEGRACIÓN REAL (Comentado):
+            if self.configured and settings.AFIP_PRODUCTION:
+                # TODO: Aquí iría la integración real
+                logger.warning("Configuración de AFIP detectada pero integración no implementada")
+                
+                """
+                EJEMPLO DE INTEGRACIÓN REAL (Comentado):
+                
+                from pyafipws.wsfe import WSFE
+                
+                # 1. Autenticación
+                wsaa = WSAA()
+                tra = wsaa.CreateTRA(service="wsfe")
+                cms = wsaa.SignTRA(tra, settings.AFIP_CERT, settings.AFIP_KEY)
+                wsaa.LoginCMS(cms)
+                
+                # 2. Inicializar servicio de facturación
+                wsfe = WSFE()
+                wsfe.Cuit = settings.AFIP_CUIT
+                wsfe.Token = wsaa.Token
+                wsfe.Sign = wsaa.Sign
+                
+                # 3. Obtener último comprobante
+                punto_venta = 1
+                ultimo = wsfe.CompUltimoAutorizado(punto_venta, tipo_cbte)
+                proximo_numero = int(ultimo) + 1
+                
+                # 4. Crear comprobante
+                fecha = datetime.now().strftime("%Y%m%d")
+                wsfe.CrearFactura(
+                    tipo_doc=80 if cuit_cliente else 99,  # 80=CUIT, 99=Consumidor Final
+                    nro_doc=cuit_cliente or 0,
+                    tipo_cbte=6,  # 6=Factura B
+                    punto_vta=punto_venta,
+                    cbte_nro=proximo_numero,
+                    imp_total=monto,
+                    imp_neto=monto / 1.21,  # Base imponible
+                    imp_iva=monto - (monto / 1.21),
+                    fecha_cbte=fecha
+                )
+                
+                # 5. Solicitar CAE
+                wsfe.CAESolicitar()
+                
+                if wsfe.ErrMsg:
+                    raise Exception(f"Error AFIP: {wsfe.ErrMsg}")
+                
+                return {
+                    "cae": wsfe.CAE,
+                    "vto": wsfe.Vto,
+                    "numero": proximo_numero,
+                    "punto_venta": punto_venta
+                }
+                """
             
-            from pyafipws.wsfe import WSFE
+            # MOCK: Generar CAE simulado
+            cae_mock = f"{venta_id.int % 100000000:014d}"  # 14 dígitos
+            vto_mock = (datetime.utcnow() + timedelta(days=10)).strftime("%Y-%m-%d")
             
-            # 1. Autenticación
-            wsaa = WSAA()
-            tra = wsaa.CreateTRA(service="wsfe")
-            cms = wsaa.SignTRA(tra, settings.AFIP_CERT, settings.AFIP_KEY)
-            wsaa.LoginCMS(cms)
-            
-            # 2. Inicializar servicio de facturación
-            wsfe = WSFE()
-            wsfe.Cuit = settings.AFIP_CUIT
-            wsfe.Token = wsaa.Token
-            wsfe.Sign = wsaa.Sign
-            
-            # 3. Obtener último comprobante
-            punto_venta = 1
-            ultimo = wsfe.CompUltimoAutorizado(punto_venta, tipo_cbte)
-            proximo_numero = int(ultimo) + 1
-            
-            # 4. Crear comprobante
-            fecha = datetime.now().strftime("%Y%m%d")
-            wsfe.CrearFactura(
-                tipo_doc=80 if cuit_cliente else 99,  # 80=CUIT, 99=Consumidor Final
-                nro_doc=cuit_cliente or 0,
-                tipo_cbte=6,  # 6=Factura B
-                punto_vta=punto_venta,
-                cbte_nro=proximo_numero,
-                imp_total=monto,
-                imp_neto=monto / 1.21,  # Base imponible
-                imp_iva=monto - (monto / 1.21),
-                fecha_cbte=fecha
-            )
-            
-            # 5. Solicitar CAE
-            wsfe.CAESolicitar()
-            
-            if wsfe.ErrMsg:
-                raise Exception(f"Error AFIP: {wsfe.ErrMsg}")
+            logger.info(f"[MOCK] CAE generado: {cae_mock}")
+            logger.info(f"[MOCK] Vencimiento: {vto_mock}")
             
             return {
-                "cae": wsfe.CAE,
-                "vto": wsfe.Vto,
-                "numero": proximo_numero,
-                "punto_venta": punto_venta
+                "cae": cae_mock,
+                "vto": vto_mock,
+                "numero_comprobante": "00001-00000123",  # Mock
+                "fecha_emision": datetime.utcnow().strftime("%Y-%m-%d"),
+                "tipo_comprobante": tipo_comprobante,
+                "mock": True,  # Indicador de que es simulación
+                "mensaje": "Factura emitida en modo MOCK. Configure AFIP para producción."
             }
-            """
         
-        # MOCK: Generar CAE simulado
-        cae_mock = f"{venta_id.int % 100000000:014d}"  # 14 dígitos
-        vto_mock = (datetime.utcnow() + timedelta(days=10)).strftime("%Y-%m-%d")
+        def _fallback_factura():
+            """Fallback cuando el circuit está OPEN - CAE temporal"""
+            logger.warning(f"Circuit Breaker OPEN - usando CAE temporal para venta {venta_id}")
+            
+            # Generar CAE temporal que se puede regularizar después
+            cae_temporal = f"TEMP-{int(time.time())}-{venta_id.int % 1000:04d}"
+            vto_temporal = (datetime.utcnow() + timedelta(days=3)).strftime("%Y-%m-%d")
+            
+            return {
+                "cae": cae_temporal,
+                "vto": vto_temporal,
+                "numero_comprobante": f"TEMP-{int(time.time()) % 100000:06d}",
+                "fecha_emision": datetime.utcnow().strftime("%Y-%m-%d"),
+                "tipo_comprobante": tipo_comprobante,
+                "fallback_mode": True,
+                "temporal": True,
+                "mensaje": "CAE temporal - AFIP no disponible. Regularizar cuando servicio se recupere.",
+                "pendiente_regularizacion": True
+            }
         
-        logger.info(f"[MOCK] CAE generado: {cae_mock}")
-        logger.info(f"[MOCK] Vencimiento: {vto_mock}")
+        try:
+            # Ejecutar llamada protegida por Circuit Breaker
+            result = afip_circuit.call(_emitir_factura_call, fallback=_fallback_factura)
+            return result
         
-        return {
-            "cae": cae_mock,
-            "vto": vto_mock,
-            "numero_comprobante": "00001-00000123",  # Mock
-            "fecha_emision": datetime.utcnow().strftime("%Y-%m-%d"),
-            "tipo_comprobante": tipo_comprobante,
-            "mock": True,  # Indicador de que es simulación
-            "mensaje": "Factura emitida en modo MOCK. Configure AFIP para producción."
-        }
+        except CircuitBreakerOpenException:
+            logger.error(f"Circuit Breaker OPEN - AFIP no disponible para venta {venta_id}")
+            return _fallback_factura()
+        
+        except Exception as e:
+            logger.error(f"Error al emitir factura: {str(e)}", exc_info=True)
+            # En producción, también usar fallback en caso de error inesperado
+            return _fallback_factura()
     
     def consultar_comprobante(self, cae: str, numero: str) -> Dict[str, Any]:
         """

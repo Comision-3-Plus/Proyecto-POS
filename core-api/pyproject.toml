@@ -99,10 +99,48 @@ ignore = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-addopts = "--cov=app --cov-report=term-missing --cov-report=html"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--color=yes",
+]
+markers = [
+    "slow: marca tests que tardan más de 1 segundo",
+    "integration: marca tests de integración (requieren DB/RabbitMQ)",
+    "unit: marca tests unitarios (rápidos, sin dependencias externas)",
+    "e2e: marca tests end-to-end (requieren toda la infraestructura)",
+    "contract: marca tests que validan contratos entre servicios",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+fail_under = 70
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [dependency-groups]
 dev = [

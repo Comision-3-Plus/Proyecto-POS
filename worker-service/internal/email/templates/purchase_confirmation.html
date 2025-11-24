@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmación de Compra</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #ffffff;
+            margin: 0;
+            font-size: 28px;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .success-icon {
+            text-align: center;
+            font-size: 80px;
+            margin: 20px 0;
+        }
+        .order-summary {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .order-item:last-child {
+            border-bottom: none;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            font-weight: bold;
+            color: #4facfe;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #4facfe;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            background-color: #333333;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ ¡Compra Confirmada!</h1>
+        </div>
+        
+        <div class="content">
+            <div class="success-icon">🎉</div>
+            
+            <p style="font-size: 18px; color: #333; text-align: center;">
+                ¡Gracias por tu compra, <strong>{{.CustomerName}}</strong>!
+            </p>
+            
+            <p style="color: #666; text-align: center;">
+                Tu pedido ha sido procesado exitosamente en <strong>{{.TiendaNombre}}</strong>
+            </p>
+            
+            <div class="order-summary">
+                <h3 style="color: #4facfe; margin-top: 0;">📦 Resumen del Pedido</h3>
+                
+                <p style="color: #666; font-size: 14px;">
+                    <strong>N° de Venta:</strong> {{.VentaID}}<br>
+                    <strong>Fecha:</strong> {{.Fecha}}<br>
+                    <strong>Método de Pago:</strong> {{.MetodoPago}}
+                </p>
+                
+                <h4 style="margin-bottom: 10px;">Productos:</h4>
+                
+                {{range .Items}}
+                <div class="order-item">
+                    <div>
+                        <strong>{{.Nombre}}</strong><br>
+                        <span style="color: #999; font-size: 14px;">
+                            {{.Cantidad}} x ${{.PrecioUnitario}}
+                        </span>
+                    </div>
+                    <div style="font-weight: bold;">
+                        ${{.Subtotal}}
+                    </div>
+                </div>
+                {{end}}
+                
+                <div class="total-row">
+                    <span>TOTAL:</span>
+                    <span>${{.Total}}</span>
+                </div>
+            </div>
+            
+            {{if .AFIPCAE}}
+            <div style="background-color: #e7f3ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <strong>📄 Datos Fiscales (AFIP):</strong><br>
+                CAE: {{.AFIPCAE}}<br>
+                Vencimiento: {{.AFIPCAEVto}}
+            </div>
+            {{end}}
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="{{.InvoiceURL}}" class="btn">Descargar Comprobante PDF</a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px; text-align: center;">
+                ¿Tienes alguna pregunta? Contáctanos en:<br>
+                📧 {{.TiendaEmail}} | 📞 {{.TiendaTelefono}}
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>
+                © 2025 {{.TiendaNombre}} | Powered by Super POS
+            </p>
+            <p style="color: #999; margin-top: 10px;">
+                Este correo fue enviado a {{.CustomerEmail}}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenido a Super POS</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #ffffff;
+            margin: 0;
+            font-size: 32px;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-text {
+            font-size: 18px;
+            color: #333333;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .features {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+        .feature-icon {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background-color: #667eea;
+            color: white;
+            text-align: center;
+            line-height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .footer {
+            background-color: #333333;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 ¡Bienvenido a Super POS!</h1>
+        </div>
+        
+        <div class="content">
+            <p class="welcome-text">
+                Hola <strong>{{.UserName}}</strong>,
+            </p>
+            
+            <p class="welcome-text">
+                ¡Nos alegra tenerte en <strong>Super POS</strong>! Tu cuenta ha sido creada exitosamente 
+                para la tienda <strong>{{.TiendaNombre}}</strong>.
+            </p>
+            
+            <div style="text-align: center;">
+                <a href="{{.AppURL}}/login" class="btn">Iniciar Sesión</a>
+            </div>
+            
+            <div class="features">
+                <h3 style="color: #667eea; margin-top: 0;">✨ Lo que puedes hacer:</h3>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">📦</span>
+                    <strong>Gestionar Inventario:</strong> Control total de tus productos
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">💰</span>
+                    <strong>Procesar Ventas:</strong> Sistema de punto de venta rápido y confiable
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">📊</span>
+                    <strong>Ver Reportes:</strong> Análisis en tiempo real de tu negocio
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">🔔</span>
+                    <strong>Recibir Alertas:</strong> Notificaciones de stock bajo automáticas
+                </div>
+            </div>
+            
+            <p class="welcome-text">
+                <strong>Tus credenciales:</strong><br>
+                📧 Email: <code>{{.UserEmail}}</code><br>
+                🔑 Contraseña: <em>La que configuraste durante el registro</em>
+            </p>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                Si tienes alguna pregunta, no dudes en contactarnos. 
+                Estamos aquí para ayudarte a hacer crecer tu negocio.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>
+                © 2025 Super POS | 
+                <a href="{{.AppURL}}/soporte">Soporte</a> | 
+                <a href="{{.AppURL}}/terminos">Términos de Servicio</a>
+            </p>
+            <p style="color: #999; margin-top: 10px;">
+                Este correo fue enviado a {{.UserEmail}}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

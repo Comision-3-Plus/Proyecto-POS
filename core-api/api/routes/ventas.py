@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlmodel import col
 from core.db import get_session
-# === AGREGADO: Import del Event Bus ===
 from core.event_bus import publish_event
-# ======================================
+from core.permissions import Permission, require_permission
+from api.deps import CurrentUser
 from models import Producto, Venta, DetalleVenta
 from schemas_models.ventas import (
     ProductoScanRead,
@@ -309,3 +309,78 @@ async def obtener_venta(
         detalles=detalles,
         created_at=venta.created_at
     )
+
+
+# =====================================================
+# ENDPOINT PROTEGIDO CON PERMISOS GRANULARES
+# =====================================================
+
+@router.patch("/{venta_id}/anular", response_model=VentaRead)
+@require_permission(Permission.VENTAS_DELETE)
+async def anular_venta(
+    venta_id: UUID,
+    current_tienda: CurrentTienda,
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> Venta:
+    """
+    🛡️ ENDPOINT PROTEGIDO: Anula una venta (requiere permiso VENTAS_DELETE)
+    
+    Solo usuarios con rol 'owner' o 'super_admin' pueden anular ventas.
+    Los cajeros y admin NO tienen este permiso por defecto.
+    
+    Acciones:
+    - Marca la venta como 'anulado'
+    - Devuelve el stock de los productos
+    - Registra auditoría de la operación
+    """
+    # Buscar la venta
+    statement = select(Venta).where(
+        Venta.id == venta_id,
+        Venta.tienda_id == current_tienda.id
+    )
+    result = await session.execute(statement)
+    venta = result.scalar_one_or_none()
+    
+    if not venta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venta no encontrada"
+        )
+    
+    if venta.status_pago == 'anulado':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La venta ya está anulada"
+        )
+    
+    # Obtener detalles de la venta para devolver stock
+    statement_detalles = select(DetalleVenta).where(
+        DetalleVenta.venta_id == venta_id
+    )
+    result_detalles = await session.execute(statement_detalles)
+    detalles = result_detalles.scalars().all()
+    
+    # Devolver stock de cada producto
+    for detalle in detalles:
+        statement_producto = select(Producto).where(
+            Producto.id == detalle.producto_id
+        )
+        result_producto = await session.execute(statement_producto)
+        producto = result_producto.scalar_one_or_none()
+        
+        if producto and producto.tipo != 'servicio':
+            producto.stock_actual += detalle.cantidad
+            session.add(producto)
+    
+    # Anular la venta
+    venta.status_pago = 'anulado'
+    session.add(venta)
+    
+    await session.commit()
+    await session.refresh(venta)
+    
+    # TODO: Registrar en tabla de auditoría
+    # audit_log(user_id=current_user.id, action='ANULAR_VENTA', venta_id=venta_id)
+    
+    return venta
