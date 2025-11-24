@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -18,9 +19,10 @@ import (
 
 // ReportRequest representa la estructura del mensaje JSON que llega desde la cola
 type ReportRequest struct {
-	UserID     int64  `json:"user_id"`
-	Email      string `json:"email_to"`
-	ReportType string `json:"report_type"` // "products", "customers", "suppliers"
+	TiendaID   uuid.UUID `json:"tienda_id"`   // Para reportes de productos
+	UserID     int64     `json:"user_id"`     // Para reportes de clientes/proveedores
+	Email      string    `json:"email_to"`
+	ReportType string    `json:"report_type"` // "products", "customers", "suppliers"
 }
 
 // StockAlertRequest representa la estructura del mensaje de alertas de stock
@@ -193,8 +195,8 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 				continue
 			}
 
-			// Procesar el chequeo de stock
-			if err := alerts.CheckStockLevels(db, emailClient); err != nil {
+			// Procesar el chequeo de stock (threshold default: 10)
+			if err := alerts.CheckStockLevels(db, emailClient, 10.0); err != nil {
 				log.Printf("❌ Error al chequear niveles de stock: %v", err)
 				d.Nack(false, true) // Reencolar para reintentar
 				continue
@@ -236,7 +238,7 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 
 // processReport procesa una solicitud de reporte
 func processReport(db *pgxpool.Pool, emailClient *email.Client, req ReportRequest) error {
-	log.Printf("🔨 Generando reporte: UserID=%d, Email=%s, Type=%s", req.UserID, req.Email, req.ReportType)
+	log.Printf("🔨 Generando reporte: TiendaID=%s, UserID=%d, Email=%s, Type=%s", req.TiendaID, req.UserID, req.Email, req.ReportType)
 
 	var reportBytes []byte
 	var err error
@@ -245,10 +247,10 @@ func processReport(db *pgxpool.Pool, emailClient *email.Client, req ReportReques
 	// Generar el reporte según el tipo
 	switch req.ReportType {
 	case "products":
-		reportBytes, err = reports.GenerateProductsReport(db, req.UserID)
+		reportBytes, err = reports.GenerateProductsReport(db, req.TiendaID)
 		filename = "reporte_productos.xlsx"
 	case "products_weekly":
-		reportBytes, err = reports.GenerateProductsReport(db, req.UserID)
+		reportBytes, err = reports.GenerateProductsReport(db, req.TiendaID)
 		filename = "reporte_productos_semanal.xlsx"
 	case "customers":
 		reportBytes, err = reports.GenerateCustomersReport(db, req.UserID)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // MessageMetadata metadata estándar de mensajes del event bus

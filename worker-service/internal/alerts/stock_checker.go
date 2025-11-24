@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"stock-in-order/worker/internal/email"
-	"stock-in-order/worker/internal/models"
 )
 
 // ProductAlert representa un producto con stock bajo (compatible con Python schema)

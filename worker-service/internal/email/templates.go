@@ -5,9 +5,9 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
 //go:embed templates/*.html
@@ -143,13 +143,20 @@ func (c *Client) SendPurchaseConfirmationEmail(to string, data PurchaseConfirmat
 
 // SendHTMLEmail envía un email HTML genérico usando SendGrid
 func (c *Client) SendHTMLEmail(to, subject, htmlBody string) error {
-	// Implementación usando SendGrid
-	// Esta función ya debería existir en sendgrid.go, solo la extendemos
-	// para soportar HTML en lugar de texto plano
+	if c.isDisabled {
+		return nil
+	}
 	
-	message := c.client.NewMail(c.from, subject, to, htmlBody)
+	// Crear el email desde
+	from := mail.NewEmail(c.fromName, c.fromEmail)
 	
-	response, err := c.client.Send(message)
+	// Crear el email hacia
+	toEmail := mail.NewEmail("", to)
+	
+	// Crear el mensaje
+	message := mail.NewSingleEmail(from, subject, toEmail, "", htmlBody)
+	
+	response, err := c.sgClient.Send(message)
 	if err != nil {
 		return fmt.Errorf("error sending HTML email: %w", err)
 	}
