@@ -5,6 +5,7 @@
  * - Sidebar con navegación
  * - Header con info del usuario
  * - Contenido principal
+ * - CajaGuard para requerir apertura de caja
  */
 
 'use client';
@@ -24,12 +25,15 @@ import {
   X,
   Lightbulb,
   Store,
+  DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { clearAuthToken } from '@/api/custom-instance';
+import { CajaGuard, CerrarCajaModal } from '@/components/caja';
+import { useTieneCajaAbierta } from '@/hooks/useCaja';
 
 // ==================== TYPES ====================
 
@@ -95,6 +99,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [cerrarCajaOpen, setCerrarCajaOpen] = useState(false);
+  const tieneCajaAbierta = useTieneCajaAbierta();
 
   // Obtener info del usuario del localStorage
   const getUserInfo = () => {
@@ -163,6 +169,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* User Info & Logout */}
           <div className="flex-shrink-0 border-t p-4">
+            {/* Botón de Cerrar Caja */}
+            {tieneCajaAbierta && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mb-3 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                onClick={() => setCerrarCajaOpen(true)}
+              >
+                <DollarSign className="mr-2 h-4 w-4" />
+                Cerrar Caja
+              </Button>
+            )}
+            
             <div className="flex items-center mb-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
@@ -208,9 +227,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <CajaGuard>
+            {children}
+          </CajaGuard>
         </main>
       </div>
+
+      {/* Modal de Cerrar Caja */}
+      <CerrarCajaModal open={cerrarCajaOpen} onOpenChange={setCerrarCajaOpen} />
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -259,6 +283,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </nav>
 
               <div className="flex-shrink-0 border-t p-4">
+                {/* Botón de Cerrar Caja en móvil */}
+                {tieneCajaAbierta && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mb-3 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                    onClick={() => {
+                      setCerrarCajaOpen(true);
+                      setIsSidebarOpen(false);
+                    }}
+                  >
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Cerrar Caja
+                  </Button>
+                )}
+                
                 <Button
                   variant="outline"
                   size="sm"

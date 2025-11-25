@@ -49,6 +49,8 @@ class Tienda(SQLModel, table=True):
     productos: List["Producto"] = Relationship(back_populates="tienda")
     ventas: List["Venta"] = Relationship(back_populates="tienda")
     insights: List["Insight"] = Relationship(back_populates="tienda")
+    sesiones_caja: List["SesionCaja"] = Relationship(back_populates="tienda")
+    movimientos_caja: List["MovimientoCaja"] = Relationship(back_populates="tienda")
 
 
 class User(SQLModel, table=True):
@@ -103,6 +105,7 @@ class User(SQLModel, table=True):
     
     # Relaciones
     tienda: Optional[Tienda] = Relationship(back_populates="users")
+    sesiones_caja: List["SesionCaja"] = Relationship(back_populates="usuario")
 
 
 class Producto(SQLModel, table=True):
@@ -358,3 +361,123 @@ class Insight(SQLModel, table=True):
     
     # Relaciones
     tienda: Optional[Tienda] = Relationship(back_populates="insights")
+
+
+class SesionCaja(SQLModel, table=True):
+    """
+    Modelo de Sesión de Caja - Control de apertura y cierre de caja
+    Gestiona el flujo de efectivo por sesión y turno de trabajo
+    """
+    __tablename__ = "sesiones_caja"
+    
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        index=True,
+        nullable=False
+    )
+    fecha_apertura: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True, server_default=func.now()),
+        description="Fecha y hora de apertura de la caja"
+    )
+    fecha_cierre: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+        description="Fecha y hora de cierre de la caja"
+    )
+    monto_inicial: float = Field(
+        nullable=False,
+        description="Monto inicial con el que se abre la caja"
+    )
+    monto_final: Optional[float] = Field(
+        default=None,
+        nullable=True,
+        description="Monto final al cerrar la caja"
+    )
+    diferencia: Optional[float] = Field(
+        default=None,
+        nullable=True,
+        description="Diferencia entre el monto esperado y el monto real al cierre"
+    )
+    estado: str = Field(
+        default="abierta",
+        max_length=50,
+        nullable=False,
+        index=True,
+        description="Estado de la sesión: abierta, cerrada"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    
+    # Foreign Keys
+    usuario_id: UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+        description="ID del usuario responsable de la sesión de caja"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece la sesión"
+    )
+    
+    # Relaciones
+    usuario: Optional["User"] = Relationship(back_populates="sesiones_caja")
+    tienda: Optional[Tienda] = Relationship(back_populates="sesiones_caja")
+    movimientos: List["MovimientoCaja"] = Relationship(back_populates="sesion", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+
+class MovimientoCaja(SQLModel, table=True):
+    """
+    Modelo de Movimiento de Caja - Registro de ingresos y egresos
+    Documenta todos los movimientos de efectivo durante una sesión
+    """
+    __tablename__ = "movimientos_caja"
+    
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        index=True,
+        nullable=False
+    )
+    tipo: str = Field(
+        max_length=50,
+        nullable=False,
+        index=True,
+        description="Tipo de movimiento: INGRESO, EGRESO"
+    )
+    monto: float = Field(
+        nullable=False,
+        description="Monto del movimiento"
+    )
+    descripcion: str = Field(
+        nullable=False,
+        description="Descripción del movimiento de caja"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True, server_default=func.now())
+    )
+    
+    # Foreign Keys
+    sesion_id: UUID = Field(
+        foreign_key="sesiones_caja.id",
+        nullable=False,
+        index=True,
+        description="ID de la sesión de caja a la que pertenece el movimiento"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece el movimiento"
+    )
+    
+    # Relaciones
+    sesion: Optional[SesionCaja] = Relationship(back_populates="movimientos")
+    tienda: Optional[Tienda] = Relationship(back_populates="movimientos_caja")

@@ -5,8 +5,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useAuth, useLogout } from '@/hooks';
-import { ReactNode } from 'react';
+import { useAuth, useLogout, useTieneCajaAbierta } from '@/hooks';
+import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import {
   LayoutDashboard,
@@ -16,7 +16,10 @@ import {
   Box,
   Settings,
   LogOut,
+  DollarSign,
 } from 'lucide-react';
+import { CerrarCajaModal } from '@/components/caja';
+import { Button } from '@/components/ui/button';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -35,6 +38,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
   const { user } = useAuth();
   const logout = useLogout();
+  const tieneCajaAbierta = useTieneCajaAbierta();
+  const [cerrarCajaOpen, setCerrarCajaOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -70,9 +75,23 @@ export function AppLayout({ children }: AppLayoutProps) {
             );
           })}
 
+          {/* Botón de Cerrar Caja */}
+          {tieneCajaAbierta && (
+            <div className="px-6 py-3 mt-8">
+              <Button
+                onClick={() => setCerrarCajaOpen(true)}
+                variant="outline"
+                className="w-full justify-start gap-3 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+              >
+                <DollarSign className="w-5 h-5" />
+                <span>Cerrar Caja</span>
+              </Button>
+            </div>
+          )}
+
           <button
             onClick={logout}
-            className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors w-full mt-8"
+            className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors w-full mt-4"
           >
             <LogOut className="w-5 h-5" />
             <span>Cerrar Sesión</span>
@@ -84,6 +103,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main className="flex-1 overflow-auto">
         <div className="p-8">{children}</div>
       </main>
+
+      {/* Modal de Cerrar Caja */}
+      <CerrarCajaModal open={cerrarCajaOpen} onOpenChange={setCerrarCajaOpen} />
     </div>
   );
 }

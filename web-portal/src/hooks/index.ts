@@ -6,3 +6,4 @@ export * from './useAuth';
 export * from './useProductos';
 export * from './useVentas';
 export * from './useDashboard';
+export * from './useCaja';
