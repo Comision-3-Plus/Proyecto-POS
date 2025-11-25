@@ -1,12 +1,12 @@
-# 🚀 Super POS - Monorepo Híbrido Refactorizado
+# 🚀 Super POS - Backend API
 
 ## 📊 Visión General
 
-Sistema POS empresarial con arquitectura de microservicios políglota que combina:
-- **Python/FastAPI** para lógica de negocio compleja
-- **Next.js** para experiencia de usuario moderna
+Sistema POS backend empresarial con arquitectura de microservicios políglota que combina:
+- **Python/FastAPI** para lógica de negocio compleja y API REST
 - **Go** para procesamiento de alto rendimiento
 - **RabbitMQ** para comunicación asíncrona entre servicios
+- **PostgreSQL** como base de datos principal
 
 ---
 
@@ -19,11 +19,6 @@ Super-POS/
 │   ├── alembic/          # Migraciones de DB
 │   ├── Dockerfile
 │   └── requirements.txt
-│
-├── web-portal/            # ⚛️ Next.js - Frontend Web
-│   ├── src/
-│   ├── Dockerfile
-│   └── package.json
 │
 ├── worker-service/        # 🚀 Go - Procesamiento Asíncrono
 │   ├── cmd/
@@ -52,14 +47,14 @@ Super-POS/
 
 ### ✅ Cambios Realizados
 
-#### 1️⃣ **Eliminación de Código Legacy**
+#### 1️⃣ **Eliminación de Código Legacy y Frontend**
 - ❌ `stock-in-order-master/backend` (Backend Go obsoleto)
 - ❌ `stock-in-order-master/frontend` (Frontend React Vite obsoleto)
+- ❌ `web-portal` (Frontend Next.js eliminado)
 - ❌ `docker-compose.yml` redundantes en subcarpetas
 
 #### 2️⃣ **Reorganización Semántica**
 - ✅ `POS/app` → `core-api` (Claridad en el propósito)
-- ✅ `POS/frontend` → `web-portal` (Nomenclatura profesional)
 - ✅ `stock-in-order-master/worker` → `worker-service`
 - ✅ `stock-in-order-master/scheduler` → `scheduler-service`
 
@@ -101,9 +96,8 @@ docker-compose ps
 
 | Servicio | URL | Descripción |
 |----------|-----|-------------|
-| **Web Portal** | http://localhost:3000 | Frontend Next.js |
-| **Core API** | http://localhost:8000 | API Python FastAPI |
-| **API Docs** | http://localhost:8000/docs | Swagger UI |
+| **Core API** | http://localhost:8001 | API Python FastAPI |
+| **API Docs** | http://localhost:8001/docs | Swagger UI |
 | **RabbitMQ Dashboard** | http://localhost:15672 | user/pass |
 | **Adminer** | http://localhost:8080 | Gestor de DB |
 
@@ -154,18 +148,6 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Web Portal (Next.js)
-
-```powershell
-cd web-portal
-
-# Instalar dependencias
-npm install
-
-# Ejecutar servidor de desarrollo
-npm run dev
-```
-
 ### Worker Service (Go)
 
 ```powershell
@@ -186,10 +168,6 @@ go run cmd/worker/main.go
 # Tests de Core API (Python)
 cd core-api
 pytest tests/ -v --cov=app
-
-# Tests de Frontend
-cd web-portal
-npm test
 
 # Tests de Worker (Go)
 cd worker-service
@@ -253,12 +231,11 @@ SENDGRID_API_KEY=your_key_here
 
 | Servicio | Imagen | Puerto | Propósito |
 |----------|--------|--------|-----------|
-| `db` | postgres:17-alpine | 5432 | Base de datos PostgreSQL |
+| `db` | postgres:17-alpine | 5433 | Base de datos PostgreSQL |
 | `rabbitmq` | rabbitmq:3.13-management | 5672, 15672 | Message broker |
-| `core_api` | custom (Python) | 8000 | API REST principal |
+| `core_api` | custom (Python) | 8001 | API REST principal |
 | `worker_go` | custom (Go) | - | Procesamiento asíncrono |
 | `scheduler_go` | custom (Go) | - | Tareas programadas |
-| `frontend` | custom (Next.js) | 3000 | Aplicación web |
 | `adminer` | adminer:latest | 8080 | Administrador de DB |
 
 ### Health Checks Configurados

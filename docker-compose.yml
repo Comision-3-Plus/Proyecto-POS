@@ -76,7 +76,7 @@ services:
       # Security & Apps
       SECRET_KEY: ${SECRET_KEY:-cambiar_esto_en_prod_por_favor}
       ALGORITHM: HS256
-      BACKEND_CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
+      BACKEND_CORS_ORIGINS: "*"
       
       # Integraciones
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
@@ -126,26 +126,7 @@ services:
       - super_network
 
   # ----------------------------------------------------------------
-  # 6. FRONTEND (La Cara - Next.js de Lautaro)
-  # ----------------------------------------------------------------
-  frontend:
-    build:
-      context: ./web-portal
-      dockerfile: Dockerfile
-    container_name: super_pos_frontend
-    restart: unless-stopped
-    depends_on:
-      - core_api
-    environment:
-      # El frontend habla con TU API (Python)
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-    ports:
-      - "3000:3000"
-    networks:
-      - super_network
-
-  # ----------------------------------------------------------------
-  # 7. ADMINER (Utilidad DB)
+  # 6. ADMINER (Utilidad DB)
   # ----------------------------------------------------------------
   adminer:
     image: adminer:latest
