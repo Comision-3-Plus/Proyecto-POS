@@ -21,7 +21,7 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja
+from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras
 
 
 @asynccontextmanager
@@ -101,6 +101,7 @@ app.include_router(inventario.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(exportar.router, prefix=settings.API_V1_STR)
 app.include_router(caja.router, prefix=settings.API_V1_STR)
+app.include_router(compras.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

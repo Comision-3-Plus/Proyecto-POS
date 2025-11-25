@@ -10,6 +10,7 @@ export { reportesService } from './reportes.service';
 export { inventarioService } from './inventario.service';
 export { insightsService } from './insights.service';
 export { cajaService } from './caja.service';
+export { comprasService } from './compras.service';
 
 // Re-exportar tipos comunes
 export type * from '@/types/api';

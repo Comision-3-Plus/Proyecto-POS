@@ -119,6 +119,7 @@ export interface VentaListRead {
   metodo_pago: string;
   created_at: string;
   cantidad_items: number;
+  factura?: Factura | null;
 }
 
 export interface VentaResumen {
@@ -128,6 +129,43 @@ export interface VentaResumen {
   metodo_pago: string;
   cantidad_items: number;
   mensaje: string;
+}
+
+// ==================== FACTURACIÓN TYPES ====================
+export interface FacturarVentaRequest {
+  tipo_factura: 'A' | 'B' | 'C';
+  cliente_doc_tipo: 'CUIT' | 'DNI' | 'CUIL';
+  cliente_doc_nro: string;
+  cuit_cliente?: string;
+}
+
+export interface FacturarVentaResponse {
+  factura_id: string;
+  cae: string;
+  vencimiento_cae: string;
+  punto_venta: number;
+  numero_comprobante: number;
+  tipo_factura: string;
+  monto_total: number;
+  mensaje: string;
+}
+
+export interface Factura {
+  id: string;
+  venta_id: string;
+  tienda_id: string;
+  tipo_factura: string;
+  punto_venta: number;
+  numero_comprobante: number;
+  cae: string;
+  vencimiento_cae: string;
+  cliente_doc_tipo: string;
+  cliente_doc_nro: string;
+  monto_neto: number;
+  monto_iva: number;
+  monto_total: number;
+  url_pdf?: string;
+  created_at: string;
 }
 
 // ==================== DASHBOARD TYPES ====================

@@ -24,6 +24,7 @@ import {
   Calendar,
   User,
   Package,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -66,6 +67,8 @@ import {
 import type { VentaRead } from '@/api/generated/models';
 import { formatCurrency } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
+import { FacturarDialog } from '@/components/ventas/FacturarDialog';
+import type { FacturarVentaResponse } from '@/types/api';
 
 // ==================== SKELETON ====================
 function TableSkeleton() {
@@ -210,6 +213,8 @@ export default function VentasPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [anularDialogOpen, setAnularDialogOpen] = useState(false);
   const [ventaToAnular, setVentaToAnular] = useState<VentaRead | null>(null);
+  const [facturarDialogOpen, setFacturarDialogOpen] = useState(false);
+  const [ventaToFacturar, setVentaToFacturar] = useState<VentaRead | null>(null);
 
   // ==================== QUERIES ====================
   const {
@@ -253,6 +258,15 @@ export default function VentasPage() {
     if (ventaToAnular) {
       anularMutation.mutate({ id: ventaToAnular.id });
     }
+  };
+
+  const handleFacturarClick = (venta: VentaRead) => {
+    setVentaToFacturar(venta);
+    setFacturarDialogOpen(true);
+  };
+
+  const handleFacturaSuccess = (factura: FacturarVentaResponse) => {
+    queryClient.invalidateQueries({ queryKey: ['ventas'] });
   };
 
   // ==================== STATS ====================
@@ -341,6 +355,7 @@ export default function VentasPage() {
                   <TableHead>Items</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Factura</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -396,6 +411,28 @@ export default function VentasPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        {(venta as VentaRead & { factura?: { cae: string; tipo_factura: string } }).factura ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <FileText className="h-3 w-3" />
+                            {(venta as VentaRead & { factura?: { tipo_factura: string } }).factura?.tipo_factura || 'Facturada'}
+                          </Badge>
+                        ) : !venta.anulada ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleFacturarClick(venta);
+                            }}
+                          >
+                            <Receipt className="h-3 w-3 mr-1" />
+                            Facturar
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
@@ -419,7 +456,7 @@ export default function VentasPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -463,6 +500,19 @@ export default function VentasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Facturar Dialog */}
+      {ventaToFacturar && (
+        <FacturarDialog
+          ventaId={ventaToFacturar.id}
+          isOpen={facturarDialogOpen}
+          onClose={() => {
+            setFacturarDialogOpen(false);
+            setVentaToFacturar(null);
+          }}
+          onSuccess={handleFacturaSuccess}
+        />
+      )}
     </div>
   );
 }

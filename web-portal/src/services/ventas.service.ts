@@ -11,6 +11,8 @@ import type {
   VentaListRead,
   VentasQueryParams,
   ProductoScanRead,
+  FacturarVentaRequest,
+  FacturarVentaResponse,
 } from '@/types/api';
 
 const API_V1 = '/api/v1';
@@ -70,6 +72,21 @@ export const ventasService = {
   async anular(id: string): Promise<VentaRead> {
     try {
       const response = await apiClient.patch<VentaRead>(`${API_V1}/ventas/${id}/anular`);
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
+  /**
+   * Emitir factura electrónica AFIP para una venta
+   */
+  async facturar(id: string, data: FacturarVentaRequest): Promise<FacturarVentaResponse> {
+    try {
+      const response = await apiClient.post<FacturarVentaResponse>(
+        `${API_V1}/ventas/${id}/facturar`,
+        data
+      );
       return response.data;
     } catch (error) {
       handleApiError(error);

@@ -8,6 +8,24 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+# ==================== FACTURACIÓN SCHEMAS ====================
+
+class FacturaRead(BaseModel):
+    """Schema de lectura para factura asociada a venta"""
+    id: UUID
+    tipo_factura: str
+    punto_venta: int
+    numero_comprobante: int
+    cae: str
+    vencimiento_cae: datetime
+    cliente_doc_tipo: str
+    cliente_doc_nro: str
+    monto_total: float
+    
+    class Config:
+        from_attributes = True
+
+
 # ==================== VENTA INPUT SCHEMAS ====================
 
 class ItemVentaInput(BaseModel):
@@ -95,6 +113,7 @@ class VentaListRead(BaseModel):
     metodo_pago: str
     created_at: datetime
     cantidad_items: int = Field(description="Cantidad de items en la venta")
+    factura: Optional[FacturaRead] = Field(None, description="Factura asociada si existe")
     
     class Config:
         from_attributes = True
