@@ -59,7 +59,11 @@ class AfipService:
         venta_id: UUID,
         cuit_cliente: Optional[str],
         monto: float,
-        tipo_comprobante: str = "FACTURA_B",
+        tipo_factura: str = "B",  # A, B o C
+        cliente_doc_tipo: str = "CUIT",
+        cliente_doc_nro: str = "",
+        monto_neto: Optional[float] = None,
+        monto_iva: Optional[float] = None,
         concepto: str = "Productos",
         items: Optional[list[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
@@ -73,7 +77,11 @@ class AfipService:
             venta_id: ID de la venta en nuestro sistema
             cuit_cliente: CUIT del cliente (opcional para Factura B)
             monto: Monto total de la factura
-            tipo_comprobante: Tipo de factura (FACTURA_A, FACTURA_B, NOTA_CREDITO, etc.)
+            tipo_factura: Tipo de factura A, B o C
+            cliente_doc_tipo: DNI, CUIT, CUIL
+            cliente_doc_nro: Número de documento
+            monto_neto: Monto neto (sin IVA)
+            monto_iva: Monto del IVA
             concepto: Concepto de la factura
             items: Lista de items para el detalle
         
@@ -105,9 +113,9 @@ class AfipService:
         
         def _emitir_factura_call():
             """Llamada protegida a AFIP envuelta en Circuit Breaker"""
-            logger.info(f"[MOCK] Emitiendo factura para venta {venta_id}")
-            logger.info(f"[MOCK] CUIT Cliente: {cuit_cliente or 'Consumidor Final'}")
-            logger.info(f"[MOCK] Tipo: {tipo_comprobante}, Monto: ${monto}")
+            logger.info(f"[MOCK] Emitiendo factura {tipo_factura} para venta {venta_id}")
+            logger.info(f"[MOCK] Cliente: {cliente_doc_tipo} {cliente_doc_nro or 'No especificado'}")
+            logger.info(f"[MOCK] Tipo: {tipo_factura}, Monto: ${monto}")
             
             if self.configured and settings.AFIP_PRODUCTION:
                 # TODO: Aquí iría la integración real
@@ -164,18 +172,31 @@ class AfipService:
                 """
             
             # MOCK: Generar CAE simulado
+            # Calcular montos si no se proporcionan
+            calc_monto_neto = monto_neto if monto_neto is not None else round(monto / 1.21, 2)
+            calc_monto_iva = monto_iva if monto_iva is not None else round(monto - calc_monto_neto, 2)
+            
+            # Generar número de comprobante mock
+            punto_venta = 1  # Punto de venta hardcodeado para desarrollo
+            numero_comp = random.randint(1000, 9999)
+            
             cae_mock = f"{venta_id.int % 100000000:014d}"  # 14 dígitos
             vto_mock = (datetime.utcnow() + timedelta(days=10)).strftime("%Y-%m-%d")
             
             logger.info(f"[MOCK] CAE generado: {cae_mock}")
             logger.info(f"[MOCK] Vencimiento: {vto_mock}")
+            logger.info(f"[MOCK] Comprobante: {punto_venta:04d}-{numero_comp:08d}")
             
             return {
                 "cae": cae_mock,
                 "vto": vto_mock,
-                "numero_comprobante": "00001-00000123",  # Mock
+                "punto_venta": punto_venta,
+                "numero_comprobante": numero_comp,
                 "fecha_emision": datetime.utcnow().strftime("%Y-%m-%d"),
-                "tipo_comprobante": tipo_comprobante,
+                "tipo_factura": tipo_factura,
+                "monto_neto": calc_monto_neto,
+                "monto_iva": calc_monto_iva,
+                "monto_total": monto,
                 "mock": True,  # Indicador de que es simulación
                 "mensaje": "Factura emitida en modo MOCK. Configure AFIP para producción."
             }
@@ -188,12 +209,20 @@ class AfipService:
             cae_temporal = f"TEMP-{int(time.time())}-{venta_id.int % 1000:04d}"
             vto_temporal = (datetime.utcnow() + timedelta(days=3)).strftime("%Y-%m-%d")
             
+            # Calcular montos si no se proporcionan
+            calc_monto_neto = monto_neto if monto_neto is not None else round(monto / 1.21, 2)
+            calc_monto_iva = monto_iva if monto_iva is not None else round(monto - calc_monto_neto, 2)
+            
             return {
                 "cae": cae_temporal,
                 "vto": vto_temporal,
-                "numero_comprobante": f"TEMP-{int(time.time()) % 100000:06d}",
+                "punto_venta": 1,
+                "numero_comprobante": int(time.time()) % 100000,
                 "fecha_emision": datetime.utcnow().strftime("%Y-%m-%d"),
-                "tipo_comprobante": tipo_comprobante,
+                "tipo_factura": tipo_factura,
+                "monto_neto": calc_monto_neto,
+                "monto_iva": calc_monto_iva,
+                "monto_total": monto,
                 "fallback_mode": True,
                 "temporal": True,
                 "mensaje": "CAE temporal - AFIP no disponible. Regularizar cuando servicio se recupere.",

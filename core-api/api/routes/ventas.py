@@ -4,6 +4,7 @@ Motor de ventas con transacciones atómicas y optimización para POS
 """
 from typing import Annotated, List, Optional
 from uuid import UUID
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,19 +13,42 @@ from core.db import get_session
 from core.event_bus import publish_event
 from core.permissions import Permission, require_permission
 from api.deps import CurrentUser
-from models import Producto, Venta, DetalleVenta
+from models import Producto, Venta, DetalleVenta, Factura
 from schemas_models.ventas import (
     ProductoScanRead,
     VentaCreate,
     VentaRead,
     VentaListRead,
     VentaResumen,
-    DetalleVentaRead
+    DetalleVentaRead,
+    FacturaRead
 )
 from api.deps import CurrentTienda
+from services.afip_service import AfipService
+from pydantic import BaseModel
 
 
 router = APIRouter(prefix="/ventas", tags=["Ventas"])
+
+
+# =====================================================
+# SCHEMAS DE FACTURACIÓN
+# =====================================================
+class FacturarVentaRequest(BaseModel):
+    tipo_factura: str  # A, B o C
+    cliente_doc_tipo: str = "CUIT"  # CUIT, DNI, CUIL
+    cliente_doc_nro: str  # Número de documento
+    cuit_cliente: Optional[str] = None  # Para compatibilidad
+    
+class FacturarVentaResponse(BaseModel):
+    factura_id: UUID
+    cae: str
+    vencimiento_cae: str
+    punto_venta: int
+    numero_comprobante: int
+    tipo_factura: str
+    monto_total: float
+    mensaje: str
 
 
 @router.get("/scan/{codigo}", response_model=ProductoScanRead)
@@ -246,13 +270,19 @@ async def listar_ventas(
         count_result = await session.execute(count_statement)
         cantidad_items = len(count_result.scalars().all())
         
+        # Buscar factura asociada si existe
+        factura_statement = select(Factura).where(Factura.venta_id == venta.id)
+        factura_result = await session.execute(factura_statement)
+        factura = factura_result.scalar_one_or_none()
+        
         ventas_response.append(VentaListRead(
             id=venta.id,
             fecha=venta.fecha,
             total=venta.total,
             metodo_pago=venta.metodo_pago,
             created_at=venta.created_at,
-            cantidad_items=cantidad_items
+            cantidad_items=cantidad_items,
+            factura=FacturaRead.model_validate(factura) if factura else None
         ))
     
     return ventas_response
@@ -384,3 +414,136 @@ async def anular_venta(
     # audit_log(user_id=current_user.id, action='ANULAR_VENTA', venta_id=venta_id)
     
     return venta
+
+
+# =====================================================
+# ENDPOINT DE FACTURACIÓN ELECTRÓNICA AFIP
+# =====================================================
+
+@router.post("/{venta_id}/facturar", response_model=FacturarVentaResponse)
+async def facturar_venta(
+    venta_id: UUID,
+    factura_request: FacturarVentaRequest,
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> FacturarVentaResponse:
+    """
+    🧾 FACTURACIÓN ELECTRÓNICA AFIP
+    
+    Emite una factura electrónica tipo A, B o C para una venta existente.
+    
+    Validaciones:
+    - Venta debe existir y pertenecer a la tienda
+    - Venta debe estar pagada (status_pago != 'pendiente')
+    - Venta no debe tener factura previa
+    
+    Proceso:
+    1. Valida la venta
+    2. Llama al servicio AFIP (mock en desarrollo)
+    3. Crea registro en tabla Factura con CAE
+    4. Retorna información de la factura emitida
+    
+    Args:
+        venta_id: ID de la venta a facturar
+        factura_request: Datos del cliente y tipo de factura
+        
+    Returns:
+        FacturarVentaResponse con CAE, número de comprobante, etc.
+    """
+    # PASO 1: Buscar la venta
+    statement = select(Venta).where(
+        Venta.id == venta_id,
+        Venta.tienda_id == current_tienda.id
+    )
+    result = await session.execute(statement)
+    venta = result.scalar_one_or_none()
+    
+    if not venta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venta no encontrada"
+        )
+    
+    # PASO 2: Validar estado de pago
+    if venta.status_pago == 'pendiente':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede facturar una venta pendiente de pago"
+        )
+    
+    if venta.status_pago == 'anulado':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede facturar una venta anulada"
+        )
+    
+    # PASO 3: Verificar si ya tiene factura
+    statement_factura = select(Factura).where(Factura.venta_id == venta_id)
+    result_factura = await session.execute(statement_factura)
+    factura_existente = result_factura.scalar_one_or_none()
+    
+    if factura_existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Esta venta ya tiene una factura emitida (CAE: {factura_existente.cae})"
+        )
+    
+    # PASO 4: Calcular montos (IVA 21%)
+    monto_total = float(venta.total)
+    monto_neto = round(monto_total / 1.21, 2)
+    monto_iva = round(monto_total - monto_neto, 2)
+    
+    # PASO 5: Llamar al servicio AFIP
+    afip_service = AfipService()
+    
+    try:
+        afip_response = await afip_service.emitir_factura(
+            venta_id=venta_id,
+            cuit_cliente=factura_request.cuit_cliente or factura_request.cliente_doc_nro,
+            monto=monto_total,
+            tipo_factura=factura_request.tipo_factura,
+            cliente_doc_tipo=factura_request.cliente_doc_tipo,
+            cliente_doc_nro=factura_request.cliente_doc_nro,
+            monto_neto=monto_neto,
+            monto_iva=monto_iva,
+            concepto="Venta POS",
+            items=[]  # TODO: Agregar items si AFIP lo requiere
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al comunicarse con AFIP: {str(e)}"
+        )
+    
+    # PASO 6: Crear registro de Factura
+    nueva_factura = Factura(
+        venta_id=venta_id,
+        tienda_id=current_tienda.id,
+        tipo_factura=factura_request.tipo_factura,
+        punto_venta=afip_response.get("punto_venta", 1),
+        numero_comprobante=afip_response.get("numero_comprobante"),
+        cae=afip_response["cae"],
+        vencimiento_cae=datetime.fromisoformat(afip_response["vto"]),
+        cliente_doc_tipo=factura_request.cliente_doc_tipo,
+        cliente_doc_nro=factura_request.cliente_doc_nro,
+        monto_neto=monto_neto,
+        monto_iva=monto_iva,
+        monto_total=monto_total,
+        url_pdf=None  # TODO: Generar PDF de factura
+    )
+    
+    session.add(nueva_factura)
+    await session.commit()
+    await session.refresh(nueva_factura)
+    
+    # PASO 7: Retornar respuesta
+    return FacturarVentaResponse(
+        factura_id=nueva_factura.id,
+        cae=nueva_factura.cae,
+        vencimiento_cae=nueva_factura.vencimiento_cae.strftime("%Y-%m-%d"),
+        punto_venta=nueva_factura.punto_venta,
+        numero_comprobante=nueva_factura.numero_comprobante,
+        tipo_factura=nueva_factura.tipo_factura,
+        monto_total=nueva_factura.monto_total,
+        mensaje=f"✅ Factura {factura_request.tipo_factura} emitida exitosamente. CAE: {nueva_factura.cae}"
+    )
