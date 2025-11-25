@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
+import { AppProviders } from "@/providers/app-providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "Nexus POS - Sistema de Punto de Venta",
-  description: "SaaS Multi-Tenant para comercios",
+  description: "Sistema de gestión de ventas y productos",
 };
 
 export default function RootLayout({
@@ -17,8 +25,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={inter.className}>
-        <Providers>{children}</Providers>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );

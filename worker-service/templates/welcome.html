@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenido a BLEND</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin: 0;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .title {
+            color: #1e293b;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 20px 0;
+        }
+        .text {
+            color: #64748b;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 0 20px 0;
+        }
+        .highlight {
+            background-color: #f1f5f9;
+            border-left: 4px solid #6366f1;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .highlight-title {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 10px 0;
+        }
+        .highlight-text {
+            color: #64748b;
+            font-size: 14px;
+            margin: 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 16px 40px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(99, 102, 241, 0.3);
+        }
+        .footer {
+            background-color: #f8fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer-text {
+            color: #94a3b8;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-link {
+            display: inline-block;
+            margin: 0 10px;
+            color: #64748b;
+            text-decoration: none;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+            .title {
+                font-size: 20px;
+            }
+            .cta-button {
+                display: block;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1 class="logo">BLEND</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <h2 class="title">¡Bienvenido a BLEND, {{.NombreCliente}}! 🎉</h2>
+            
+            <p class="text">
+                Estamos muy contentos de tenerte con nosotros. BLEND es tu nuevo punto de venta inteligente 
+                que te ayudará a gestionar tu negocio de manera eficiente y profesional.
+            </p>
+
+            <div class="highlight">
+                <h3 class="highlight-title">Tu cuenta está lista</h3>
+                <p class="highlight-text">
+                    Ya puedes comenzar a usar todas las funcionalidades de BLEND. Carga tus productos, 
+                    realiza ventas y accede a reportes en tiempo real.
+                </p>
+            </div>
+
+            <p class="text">
+                <strong>Primeros pasos:</strong>
+            </p>
+            <ul style="color: #64748b; line-height: 1.8;">
+                <li>Configura tu tienda y datos fiscales</li>
+                <li>Carga tu catálogo de productos</li>
+                <li>Realiza tu primera venta</li>
+                <li>Explora el dashboard y reportes</li>
+            </ul>
+
+            <center>
+                <a href="{{.DashboardURL}}" class="cta-button">
+                    Ir al Dashboard
+                </a>
+            </center>
+
+            <p class="text" style="margin-top: 30px;">
+                Si tienes alguna pregunta, nuestro equipo de soporte está disponible 24/7 para ayudarte.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-text" style="font-weight: 600; color: #64748b;">BLEND - Tu POS Inteligente</p>
+            <p class="footer-text">Av. Corrientes 1234, CABA, Argentina</p>
+            <p class="footer-text">soporte@blend.com.ar | +54 11 1234-5678</p>
+            
+            <div class="social-links">
+                <a href="#" class="social-link">Instagram</a>
+                <a href="#" class="social-link">Twitter</a>
+                <a href="#" class="social-link">LinkedIn</a>
+            </div>
+            
+            <p class="footer-text" style="font-size: 12px; margin-top: 20px;">
+                © {{.Year}} BLEND. Todos los derechos reservados.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

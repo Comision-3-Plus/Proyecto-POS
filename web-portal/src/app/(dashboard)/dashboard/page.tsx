@@ -1,168 +1,323 @@
-"use client";
+/**
+ * 📊 DASHBOARD PAGE - Vista Principal
+ * 
+ * Muestra métricas clave del negocio:
+ * - Resumen del día/mes
+ * - Ventas en tiempo real
+ * - Gráficos y estadísticas
+ * - Alertas e insights
+ */
 
-import { useDashboard } from "@/hooks/use-dashboard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, FileText, AlertTriangle, TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
-import dynamic from "next/dynamic";
+'use client';
 
-// ⚡ LAZY LOAD: Recharts es pesado (100kb+), cargarlo solo cuando se necesita
-const LazyChart = dynamic(
-  () => import("@/components/dashboard/sales-chart"),
-  { 
-    loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" />,
-    ssr: false // No renderizar en servidor (charts son solo cliente)
-  }
-);
+import { useState } from 'react';
+import {
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  ShoppingCart,
+  Package,
+  AlertCircle,
+  RefreshCcw,
+} from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+// 🤖 Hooks generados por Orval
+import {
+  useGetApiV1DashboardResumen,
+  useGetApiV1DashboardVentasTiempoReal,
+  useGetApiV1Insights,
+} from '@/api/generated/endpoints';
+
+import { formatCurrency, formatNumber, calculatePercentageChange } from '@/lib/utils';
+
+// ==================== METRIC CARD COMPONENT ====================
+
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  change?: number;
+  icon: React.ComponentType<{ className?: string }>;
+  subtitle?: string;
+}
+
+function MetricCard({ title, value, change, icon: Icon, subtitle }: MetricCardProps) {
+  const isPositive = change !== undefined && change >= 0;
+  
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-gray-500" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {subtitle && (
+          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+        )}
+        {change !== undefined && (
+          <div className="flex items-center text-xs mt-2">
+            {isPositive ? (
+              <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
+            ) : (
+              <TrendingDown className="h-3 w-3 text-red-600 mr-1" />
+            )}
+            <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
+              {isPositive ? '+' : ''}{change.toFixed(1)}%
+            </span>
+            <span className="text-gray-500 ml-1">vs período anterior</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
 
 export default function DashboardPage() {
-  const { metrics, insights, isLoading, isFetching } = useDashboard();
+  const [periodo, setPeriodo] = useState<'hoy' | 'mes'>('hoy');
 
-  // ⚡ OPTIMIZACIÓN: Solo mostrar skeleton si NO hay datos en cache (primera carga)
-  // Si hay datos, renderizar inmediatamente aunque esté fetching
-  const shouldShowSkeleton = isLoading && !metrics;
+  // ==================== QUERIES ====================
 
-  if (shouldShowSkeleton) {
+  /**
+   * 📊 Resumen de métricas
+   */
+  const {
+    data: resumen,
+    isLoading: isLoadingResumen,
+    refetch: refetchResumen,
+  } = useGetApiV1DashboardResumen(
+    { periodo },
+    {
+      query: {
+        refetchInterval: 60000, // Refetch cada 60 segundos
+      },
+    }
+  );
+
+  /**
+   * ⚡ Ventas en tiempo real
+   */
+  const {
+    data: ventasTiempoReal,
+    isLoading: isLoadingTiempoReal,
+  } = useGetApiV1DashboardVentasTiempoReal(
+    { limite: 10 },
+    {
+      query: {
+        refetchInterval: 10000, // Refetch cada 10 segundos
+      },
+    }
+  );
+
+  /**
+   * 💡 Insights y alertas
+   */
+  const {
+    data: insights,
+    isLoading: isLoadingInsights,
+  } = useGetApiV1Insights(
+    { archivado: false },
+    {
+      query: {
+        refetchInterval: 300000, // Refetch cada 5 minutos
+      },
+    }
+  );
+
+  // ==================== HANDLERS ====================
+
+  const handleRefresh = () => {
+    refetchResumen();
+  };
+
+  // ==================== RENDER ====================
+
+  if (isLoadingResumen) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-48 mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-64"></div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded animate-pulse"></div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <RefreshCcw className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-          <p className="text-gray-600">Resumen de tu tienda</p>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-1">
+            Vista general de tu negocio
+          </p>
         </div>
-        {isFetching && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
-            Actualizando...
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <Tabs value={periodo} onValueChange={(v: any) => setPeriodo(v)}>
+            <TabsList>
+              <TabsTrigger value="hoy">Hoy</TabsTrigger>
+              <TabsTrigger value="mes">Este Mes</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <RefreshCcw className="h-4 w-4 mr-2" />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
-      {/* Métricas Principales */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Ventas de Hoy
+      {/* Insights/Alertas */}
+      {insights && insights.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="flex items-center text-orange-800">
+              <AlertCircle className="h-5 w-5 mr-2" />
+              Alertas e Insights ({insights.length})
             </CardTitle>
-            <DollarSign className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
-              {formatCurrency(metrics?.ventas_hoy || 0)}
+            <div className="space-y-2">
+              {insights.slice(0, 3).map((insight) => (
+                <div
+                  key={insight.id}
+                  className="flex items-start gap-3 p-3 bg-white rounded-lg"
+                >
+                  <Badge
+                    variant={
+                      insight.urgencia === 'alta'
+                        ? 'destructive'
+                        : insight.urgencia === 'media'
+                        ? 'default'
+                        : 'secondary'
+                    }
+                  >
+                    {insight.urgencia}
+                  </Badge>
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{insight.titulo}</div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {insight.descripcion}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              +12% vs. ayer
-            </p>
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Tickets Emitidos
-            </CardTitle>
-            <FileText className="h-5 w-5 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {metrics?.tickets_emitidos || 0}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Hoy
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Stock Bajo
-            </CardTitle>
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {metrics?.productos_bajo_stock || 0}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Productos con menos de 10 unidades
-            </p>
-          </CardContent>
-        </Card>
+      {/* Métricas principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <MetricCard
+          title="Ventas Totales"
+          value={formatCurrency(resumen?.total_ventas || 0)}
+          change={resumen?.cambio_ventas}
+          icon={DollarSign}
+          subtitle={`${resumen?.cantidad_ventas || 0} transacciones`}
+        />
+        <MetricCard
+          title="Ticket Promedio"
+          value={formatCurrency(resumen?.ticket_promedio || 0)}
+          change={resumen?.cambio_ticket}
+          icon={ShoppingCart}
+        />
+        <MetricCard
+          title="Productos Vendidos"
+          value={formatNumber(resumen?.productos_vendidos || 0)}
+          change={resumen?.cambio_productos}
+          icon={Package}
+        />
+        <MetricCard
+          title="Ganancia Bruta"
+          value={formatCurrency(resumen?.ganancia_bruta || 0)}
+          change={resumen?.cambio_ganancia}
+          icon={TrendingUp}
+        />
       </div>
 
-      {/* Gráfico de Ventas */}
+      {/* Ventas en Tiempo Real */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Ventas Últimos 7 Días
+          <CardTitle className="flex items-center">
+            <RefreshCcw className="h-5 w-5 mr-2 text-green-600" />
+            Ventas en Tiempo Real
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-80">
-            <LazyChart data={metrics?.ventas_semana || []} />
-          </div>
+          {isLoadingTiempoReal ? (
+            <div className="text-center py-8 text-gray-500">
+              Cargando ventas...
+            </div>
+          ) : ventasTiempoReal && ventasTiempoReal.length > 0 ? (
+            <div className="space-y-3">
+              {ventasTiempoReal.map((venta) => (
+                <div
+                  key={venta.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">
+                        {venta.metodo_pago}
+                      </Badge>
+                      <span className="text-xs text-gray-500">
+                        {new Date(venta.fecha).toLocaleTimeString('es-AR')}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      {venta.items.length} producto{venta.items.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold">
+                      {formatCurrency(venta.total)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No hay ventas recientes
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Insights de IA */}
-      <Card>
-        <CardHeader>
-          <CardTitle>💡 Insights & Recomendaciones</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {insights.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">
-                No hay insights disponibles
-              </p>
-            ) : (
-              insights.map((insight) => (
-                <div
-                  key={insight.id}
-                  className={`p-4 rounded-lg border ${
-                    insight.nivel_urgencia === "CRITICA"
-                      ? "bg-red-50 border-red-200"
-                      : insight.nivel_urgencia === "ALTA"
-                      ? "bg-amber-50 border-amber-200"
-                      : insight.nivel_urgencia === "MEDIA"
-                      ? "bg-blue-50 border-blue-200"
-                      : "bg-green-50 border-green-200"
-                  }`}
-                >
-                  <p className="text-sm font-medium">{insight.mensaje}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(insight.created_at).toLocaleDateString("es-AR", {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
+      {/* Distribución por método de pago */}
+      {resumen?.ventas_por_metodo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribución por Método de Pago</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {Object.entries(resumen.ventas_por_metodo).map(([metodo, datos]: any) => (
+                <div key={metodo} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{metodo}</span>
+                    <span className="text-gray-600">
+                      {formatCurrency(datos.total)} ({datos.cantidad} ventas)
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-indigo-600 h-2 rounded-full"
+                      style={{
+                        width: `${(datos.total / (resumen.total_ventas || 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -1,103 +1,99 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+/**
+ * Cliente API configurado con axios
+ * Base para todas las llamadas al backend
+ */
 
-export interface ApiError {
-  detail: string;
-}
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-export class ApiClient {
-  private async getToken(): Promise<string | null> {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("token");
-  }
+// URL base del backend - configurar según entorno
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const token = await this.getToken();
+/**
+ * Instancia principal de axios configurada
+ */
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 30000, // 30 segundos
+});
+
+/**
+ * Interceptor de request - agrega token de autenticación
+ */
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    // Obtener token del localStorage
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
-    if (options.headers) {
-      Object.assign(headers, options.headers);
-    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
-    // ⚡ TIMEOUT: Abortar request después de 5s
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorMessage = "Error en la petición";
-        try {
-          const errorData = await response.json();
-          // Manejar diferentes formatos de error del backend
-          if (errorData.error?.message) {
-            errorMessage = errorData.error.message;
-          } else if (errorData.detail) {
-            errorMessage = errorData.detail;
-          } else if (errorData.message) {
-            errorMessage = errorData.message;
-          }
-        } catch {
-          // Si no se puede parsear el JSON, usar mensaje por defecto
-          errorMessage = `Error ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+/**
+ * Interceptor de response - manejo de errores globales
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    // Manejo de errores de autenticación
+    if (error.response?.status === 401) {
+      // Token expirado o inválido
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
       }
-
-      return response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout - El servidor no respondió a tiempo');
-      }
-      throw error;
     }
+    
+    // Manejo de errores del servidor
+    if (error.response?.status === 500) {
+      console.error('Error del servidor:', error.response.data);
+    }
+    
+    return Promise.reject(error);
   }
+);
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "GET" });
+/**
+ * Helper para extraer mensaje de error
+ */
+export const getErrorMessage = (error: unknown): string => {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<{ detail: string | { msg: string }[] }>;
+    
+    if (axiosError.response?.data?.detail) {
+      const detail = axiosError.response.data.detail;
+      
+      // Si es un array de errores de validación
+      if (Array.isArray(detail)) {
+        return detail.map(err => err.msg).join(', ');
+      }
+      
+      // Si es un string
+      return detail;
+    }
+    
+    return axiosError.message || 'Error desconocido';
   }
+  
+  return 'Error desconocido';
+};
 
-  async post<T>(endpoint: string, data: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
+/**
+ * Helper para manejar errores de forma consistente
+ */
+export const handleApiError = (error: unknown): never => {
+  const message = getErrorMessage(error);
+  throw new Error(message);
+};
 
-  async put<T>(endpoint: string, data: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async patch<T>(endpoint: string, data: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "DELETE" });
-  }
-}
-
-export const apiClient = new ApiClient();
+export default apiClient;

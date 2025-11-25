@@ -1,0 +1,18 @@
+/**
+ * /**
+ *  * 🤖 GENERADO AUTOMÁTICAMENTE POR ORVAL
+ *  * ⚠️ NO EDITAR MANUALMENTE - Se sobrescribirá en la próxima generación
+ *  *
+ *  * Endpoint: undefined
+ *  * Tag: undefined
+ *  * Generado: 2025-11-24T21:12:17.605Z
+ *  *\/
+ */
+
+export interface UsuarioCreate {
+  email: string;
+  full_name: string;
+  password: string;
+  rol?: string;
+  tienda_id: string;
+}

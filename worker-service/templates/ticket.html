@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de Venta</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin: 0;
+        }
+        .header-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            margin: 5px 0 0 0;
+        }
+        .content {
+            padding: 30px;
+        }
+        .ticket-number {
+            text-align: center;
+            padding: 20px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .ticket-label {
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        .ticket-value {
+            color: #1e293b;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 5px 0 0 0;
+        }
+        .info-grid {
+            display: table;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        .info-row {
+            display: table-row;
+        }
+        .info-label {
+            display: table-cell;
+            color: #64748b;
+            font-size: 14px;
+            padding: 8px 0;
+            width: 40%;
+        }
+        .info-value {
+            display: table-cell;
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 8px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+        .items-table thead {
+            background-color: #f1f5f9;
+        }
+        .items-table th {
+            color: #475569;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 10px;
+            text-align: left;
+        }
+        .items-table th:last-child {
+            text-align: right;
+        }
+        .items-table td {
+            color: #1e293b;
+            font-size: 14px;
+            padding: 12px 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .items-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+        .items-table .product-name {
+            font-weight: 600;
+        }
+        .items-table .product-qty {
+            color: #64748b;
+            font-size: 13px;
+        }
+        .totals {
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        .total-label {
+            color: #64748b;
+            font-size: 14px;
+        }
+        .total-value {
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .total-row.final {
+            border-top: 2px solid #6366f1;
+            margin-top: 10px;
+            padding-top: 15px;
+        }
+        .total-row.final .total-label {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .total-row.final .total-value {
+            color: #10b981;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .payment-method {
+            background-color: #ecfdf5;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .payment-method-label {
+            color: #047857;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 0 5px 0;
+        }
+        .payment-method-value {
+            color: #065f46;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+        }
+        .cta-button {
+            display: block;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 30px 0;
+            box-shadow: 0 4px 6px rgba(99, 102, 241, 0.3);
+        }
+        .footer {
+            background-color: #f8fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer-text {
+            color: #94a3b8;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 20px;
+            }
+            .items-table th,
+            .items-table td {
+                font-size: 12px;
+                padding: 8px 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1 class="logo">BLEND</h1>
+            <p class="header-subtitle">Comprobante de Venta</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Ticket Number -->
+            <div class="ticket-number">
+                <p class="ticket-label">Ticket N°</p>
+                <h2 class="ticket-value">{{.VentaID}}</h2>
+            </div>
+
+            <!-- Info Grid -->
+            <div class="info-grid">
+                <div class="info-row">
+                    <div class="info-label">Fecha:</div>
+                    <div class="info-value">{{.Fecha}}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Cliente:</div>
+                    <div class="info-value">{{.ClienteNombre}}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Tienda:</div>
+                    <div class="info-value">{{.TiendaNombre}}</div>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th style="text-align: center;">Cant.</th>
+                        <th style="text-align: right;">Precio</th>
+                        <th style="text-align: right;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Items}}
+                    <tr>
+                        <td>
+                            <div class="product-name">{{.ProductoNombre}}</div>
+                        </td>
+                        <td style="text-align: center;">{{.Cantidad}}</td>
+                        <td style="text-align: right;">{{.PrecioUnitario}}</td>
+                        <td>{{.Subtotal}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+
+            <!-- Totals -->
+            <div class="totals">
+                <div class="total-row">
+                    <span class="total-label">Subtotal:</span>
+                    <span class="total-value">{{.Subtotal}}</span>
+                </div>
+                <div class="total-row">
+                    <span class="total-label">IVA (21%):</span>
+                    <span class="total-value">{{.IVA}}</span>
+                </div>
+                <div class="total-row final">
+                    <span class="total-label">TOTAL:</span>
+                    <span class="total-value">{{.Total}}</span>
+                </div>
+            </div>
+
+            <!-- Payment Method -->
+            <div class="payment-method">
+                <p class="payment-method-label">Método de Pago</p>
+                <h3 class="payment-method-value">{{.MetodoPago}}</h3>
+            </div>
+
+            <!-- CTA Button -->
+            <a href="{{.ComprobanteURL}}" class="cta-button">
+                📄 Ver Comprobante PDF
+            </a>
+
+            <p style="color: #64748b; font-size: 14px; text-align: center; margin-top: 20px;">
+                Este comprobante es válido como factura electrónica.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-text" style="font-weight: 600; color: #64748b;">Gracias por tu compra</p>
+            <p class="footer-text">BLEND - Tu POS Inteligente</p>
+            <p class="footer-text">soporte@blend.com.ar</p>
+            <p class="footer-text" style="font-size: 12px; margin-top: 15px;">
+                © {{.Year}} BLEND. Todos los derechos reservados.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
