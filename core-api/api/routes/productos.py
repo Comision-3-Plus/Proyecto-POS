@@ -1,261 +1,453 @@
 """
-Rutas de Productos - Nexus POS
-CRUD completo con filtrado Multi-Tenant y polimorfismo
+Rutas de Productos - Inventory Ledger System
+BREAKING CHANGES: API completamente nueva con variantes y ledger
 """
 from typing import Annotated, Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, col, and_, or_, func
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from core.db import get_session
 from core.cache import invalidate_cache
-from core.validators_polymorphic import validar_atributos_producto, validar_stock_segun_tipo
 import logging
-from models import Producto, Tienda
-from schemas_models.productos import (
-    ProductoCreate,
-    ProductoUpdate,
-    ProductoRead,
-    ProductoReadWithCalculatedStock
+from models import (
+    Product, ProductVariant, InventoryLedger,
+    Size, Color, Location, Tienda
+)
+from schemas_models.inventory_ledger import (
+    ProductCreate,
+    ProductRead,
+    ProductDetail,
+    ProductVariantRead,
+    ProductVariantWithStock,
+    StockSummary,
+    ProductCreateResponse,
+    AddVariantRequest,
+    InventoryTransactionCreate,
+    SizeRead,
+    ColorRead
 )
 from api.deps import CurrentTienda
 
-
-router = APIRouter(prefix="/productos", tags=["Productos"])
+router = APIRouter(prefix="/productos", tags=["Productos - Inventory Ledger"])
 logger = logging.getLogger(__name__)
 
 
-def calcular_stock_ropa(producto: Producto) -> float:
-    """
-    Calcula el stock total de un producto tipo ropa
-    sumando el stock de todas sus variantes
-    """
-    if producto.tipo != 'ropa':
-        return producto.stock_actual
-    
-    variantes = producto.atributos.get('variantes', [])
-    stock_total = sum(variante.get('stock', 0) for variante in variantes)
-    return float(stock_total)
+# =====================================================
+# CATÁLOGOS: SIZES, COLORS, LOCATIONS
+# =====================================================
 
-
-@router.post("/", response_model=ProductoRead, status_code=status.HTTP_201_CREATED)
-async def crear_producto(
-    producto_data: ProductoCreate,
+@router.get("/sizes", response_model=List[SizeRead])
+async def listar_sizes(
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)]
-) -> Producto:
+) -> List[SizeRead]:
     """
-    Crea un nuevo producto para la tienda actual
-    
-    - Asigna automáticamente el tienda_id de la tienda actual
-    - Para productos tipo 'ropa', calcula el stock_actual desde las variantes
-    - Valida que el SKU no esté duplicado en la tienda
-    - **NUEVO**: Validación polimórfica de atributos según tipo
+    Lista todos los talles de la tienda ordenados por sort_order
     """
-    # 🛡️ VALIDACIÓN POLIMÓRFICA: Validar atributos según tipo de producto
-    try:
-        atributos_validados = validar_atributos_producto(
-            tipo=producto_data.tipo,
-            atributos=producto_data.atributos
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+    query = select(Size).where(
+        Size.tienda_id == current_tienda.id
+    ).order_by(Size.sort_order)
     
-    # Validar SKU único dentro de la tienda
-    statement = select(Producto).where(
-        Producto.tienda_id == current_tienda.id,
-        Producto.sku == producto_data.sku
+    result = await session.execute(query)
+    sizes = result.scalars().all()
+    
+    return [SizeRead.model_validate(s) for s in sizes]
+
+
+@router.get("/colors", response_model=List[ColorRead])
+async def listar_colors(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> List[ColorRead]:
+    """
+    Lista todos los colores de la tienda
+    """
+    query = select(Color).where(
+        Color.tienda_id == current_tienda.id
+    ).order_by(Color.name)
+    
+    result = await session.execute(query)
+    colors = result.scalars().all()
+    
+    return [ColorRead.model_validate(c) for c in colors]
+
+
+@router.get("/locations", response_model=List)
+async def listar_locations(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> List[dict]:
+    """
+    Lista todas las ubicaciones (sucursales/depósitos) de la tienda
+    """
+    query = select(Location).where(
+        Location.tienda_id == current_tienda.id
+    ).order_by(Location.is_default.desc(), Location.name)
+    
+    result = await session.execute(query)
+    locations = result.scalars().all()
+    
+    return [
+        {
+            "location_id": str(loc.location_id),
+            "name": loc.name,
+            "type": loc.type,
+            "address": loc.address,
+            "is_default": loc.is_default
+        }
+        for loc in locations
+    ]
+
+
+# =====================================================
+# HELPERS: GENERACIÓN DE SKU Y CÁLCULO DE STOCK
+# =====================================================
+
+def generate_variant_sku(base_sku: str, color_name: Optional[str], size_name: Optional[str]) -> str:
+    """
+    Genera SKU único para una variante
+    Formato: BASE-COLOR-SIZE o BASE-COLOR o BASE-SIZE
+    """
+    parts = [base_sku.upper()]
+    if color_name:
+        parts.append(color_name.upper().replace(' ', ''))
+    if size_name:
+        parts.append(size_name.upper().replace(' ', ''))
+    
+    return '-'.join(parts)
+
+
+async def calculate_stock_by_variant(
+    session: AsyncSession,
+    variant_id: UUID,
+    location_id: Optional[UUID] = None
+) -> float:
+    """
+    Calcula stock actual de una variante desde el ledger
+    Si location_id es None, devuelve stock total de todas las ubicaciones
+    """
+    query = select(func.sum(InventoryLedger.delta)).where(
+        InventoryLedger.variant_id == variant_id
     )
-    result = await session.execute(statement)
-    existing_producto = result.scalar_one_or_none()
     
-    if existing_producto is not None:
+    if location_id:
+        query = query.where(InventoryLedger.location_id == location_id)
+    
+    result = await session.execute(query)
+    stock = result.scalar()
+    return float(stock) if stock is not None else 0.0
+
+
+async def get_stock_by_location(
+    session: AsyncSession,
+    variant_id: UUID
+) -> List[dict]:
+    """
+    Obtiene stock de una variante por cada ubicación
+    """
+    query = select(
+        Location.location_id,
+        Location.name,
+        Location.type,
+        func.sum(InventoryLedger.delta).label('stock')
+    ).select_from(InventoryLedger).join(
+        Location, InventoryLedger.location_id == Location.location_id
+    ).where(
+        InventoryLedger.variant_id == variant_id
+    ).group_by(
+        Location.location_id, Location.name, Location.type
+    )
+    
+    result = await session.execute(query)
+    locations_stock = []
+    
+    for row in result:
+        locations_stock.append({
+            "location_id": str(row.location_id),
+            "location_name": row.name,
+            "location_type": row.type,
+            "stock": float(row.stock) if row.stock else 0.0
+        })
+    
+    return locations_stock
+
+
+# =====================================================
+# POST /productos - CREAR PRODUCTO CON VARIANTES
+# =====================================================
+
+@router.post("/", response_model=ProductCreateResponse, status_code=status.HTTP_201_CREATED)
+async def crear_producto(
+    producto_data: ProductCreate,
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> ProductCreateResponse:
+    """
+    Crea un producto padre CON variantes obligatorias
+    
+    **BREAKING CHANGE**: Ya no acepta JSONB. Requiere:
+    - Lista de variantes (mínimo 1)
+    - Cada variante con size_id, color_id, price, initial_stock
+    
+    **Flujo transaccional:**
+    1. Crea Product padre
+    2. Para cada variante:
+       - Genera SKU único
+       - Crea ProductVariant
+       - Crea transacción INITIAL_STOCK en ledger
+    3. Todo en una transacción ACID
+    """
+    # Validar que base_sku no esté duplicado
+    query = select(Product).where(
+        Product.tienda_id == current_tienda.id,
+        Product.base_sku == producto_data.base_sku
+    )
+    result = await session.execute(query)
+    if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe un producto con SKU '{producto_data.sku}' en esta tienda"
+            detail=f"Ya existe un producto con base_sku '{producto_data.base_sku}'"
         )
     
-    # Crear producto
-    producto_dict = producto_data.model_dump()
-    producto_dict['tienda_id'] = current_tienda.id
-    producto_dict['atributos'] = atributos_validados  # Usar atributos validados
+    # Obtener ubicación default de la tienda
+    default_location_query = select(Location).where(
+        Location.tienda_id == current_tienda.id,
+        Location.is_default == True
+    )
+    default_location_result = await session.execute(default_location_query)
+    default_location = default_location_result.scalar_one_or_none()
     
-    # Calcular stock automáticamente para productos tipo ropa
-    if producto_data.tipo == 'ropa':
-        variantes = atributos_validados.get('variantes', [])
-        stock_total = sum(variante.get('stock', 0) for variante in variantes)
-        producto_dict['stock_actual'] = float(stock_total)
+    if not default_location:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="La tienda no tiene una ubicación default configurada"
+        )
     
-    # 🛡️ VALIDACIÓN: Stock coherente con tipo de producto
-    validar_stock_segun_tipo(producto_data.tipo, producto_dict.get('stock_actual', 0))
-    
-    nuevo_producto = Producto(**producto_dict)
-    
-    session.add(nuevo_producto)
-    await session.commit()
-    await session.refresh(nuevo_producto)
-    
-    # Invalidar caché
-    invalidate_cache(f"productos:{current_tienda.id}")
-    logger.info(f"Producto creado: {nuevo_producto.id} - {nuevo_producto.nombre}")
-    
-    return nuevo_producto
-
-
-@router.get("/buscar")
-async def buscar_productos_avanzado(
-    current_tienda: CurrentTienda,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    q: Optional[str] = Query(None, description="Búsqueda por nombre o SKU"),
-    tipo: Optional[str] = Query(None, description="Filtrar por tipo"),
-    precio_min: Optional[float] = Query(None, ge=0),
-    precio_max: Optional[float] = Query(None, ge=0),
-    stock_min: Optional[float] = Query(None, ge=0),
-    solo_activos: bool = Query(True),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
-) -> dict:
-    """
-    Búsqueda avanzada de productos con múltiples filtros
-    
-    Filtros disponibles:
-    - q: Búsqueda por nombre o SKU (case-insensitive)
-    - tipo: Filtrar por tipo de producto
-    - precio_min/max: Rango de precios
-    - stock_min: Stock mínimo
-    - solo_activos: Solo productos activos
-    
-    Retorna: items, total, paginación
-    """
-    conditions = [Producto.tienda_id == current_tienda.id]
-    
-    if solo_activos:
-        conditions.append(Producto.is_active == True)
-    
-    if q:
-        search_pattern = f"%{q.lower()}%"
-        conditions.append(
-            or_(
-                col(Producto.nombre).ilike(search_pattern),
-                col(Producto.sku).ilike(search_pattern),
-                col(Producto.descripcion).ilike(search_pattern)
+    try:
+        # 1. Crear producto padre
+        nuevo_producto = Product(
+            tienda_id=current_tienda.id,
+            name=producto_data.name,
+            base_sku=producto_data.base_sku,
+            description=producto_data.description,
+            category=producto_data.category,
+            is_active=True
+        )
+        session.add(nuevo_producto)
+        await session.flush()  # Para obtener el product_id
+        
+        variantes_creadas = []
+        transacciones_count = 0
+        
+        # 2. Crear variantes
+        for variant_data in producto_data.variants:
+            # Obtener nombres de size y color si existen
+            size_name = None
+            color_name = None
+            
+            if variant_data.size_id:
+                size_query = select(Size).where(
+                    Size.id == variant_data.size_id,
+                    Size.tienda_id == current_tienda.id
+                )
+                size_result = await session.execute(size_query)
+                size = size_result.scalar_one_or_none()
+                if size:
+                    size_name = size.name
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Talle con ID {variant_data.size_id} no encontrado"
+                    )
+            
+            if variant_data.color_id:
+                color_query = select(Color).where(
+                    Color.id == variant_data.color_id,
+                    Color.tienda_id == current_tienda.id
+                )
+                color_result = await session.execute(color_query)
+                color = color_result.scalar_one_or_none()
+                if color:
+                    color_name = color.name
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Color con ID {variant_data.color_id} no encontrado"
+                    )
+            
+            # Generar SKU único
+            variant_sku = generate_variant_sku(producto_data.base_sku, color_name, size_name)
+            
+            # Validar SKU único
+            sku_check = select(ProductVariant).where(
+                ProductVariant.tienda_id == current_tienda.id,
+                ProductVariant.sku == variant_sku
             )
+            sku_result = await session.execute(sku_check)
+            if sku_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Ya existe una variante con SKU '{variant_sku}'"
+                )
+            
+            # Crear variante
+            nueva_variante = ProductVariant(
+                product_id=nuevo_producto.product_id,
+                tienda_id=current_tienda.id,
+                sku=variant_sku,
+                size_id=variant_data.size_id,
+                color_id=variant_data.color_id,
+                price=variant_data.price,
+                barcode=variant_data.barcode,
+                is_active=True
+            )
+            session.add(nueva_variante)
+            await session.flush()  # Para obtener variant_id
+            
+            # Crear transacción de stock inicial si hay stock
+            if variant_data.initial_stock > 0:
+                ubicacion_destino = variant_data.location_id or default_location.location_id
+                
+                transaccion = InventoryLedger(
+                    tienda_id=current_tienda.id,
+                    variant_id=nueva_variante.variant_id,
+                    location_id=ubicacion_destino,
+                    delta=variant_data.initial_stock,
+                    transaction_type='INITIAL_STOCK',
+                    reference_doc=f"PRODUCT_CREATION_{nuevo_producto.product_id}",
+                    notes=f"Stock inicial al crear producto"
+                )
+                session.add(transaccion)
+                transacciones_count += 1
+            
+            variantes_creadas.append(nueva_variante)
+        
+        # Commit de toda la transacción
+        await session.commit()
+        
+        # Refresh para obtener relaciones
+        await session.refresh(nuevo_producto)
+        for variante in variantes_creadas:
+            await session.refresh(variante)
+        
+        # Invalidar caché
+        invalidate_cache(f"productos:{current_tienda.id}")
+        
+        logger.info(
+            f"Producto creado: {nuevo_producto.product_id} con {len(variantes_creadas)} variantes"
         )
-    
-    if tipo:
-        conditions.append(Producto.tipo == tipo)
-    
-    if precio_min is not None:
-        conditions.append(Producto.precio_venta >= precio_min)
-    
-    if precio_max is not None:
-        conditions.append(Producto.precio_venta <= precio_max)
-    
-    if stock_min is not None:
-        conditions.append(Producto.stock_actual >= stock_min)
-    
-    stmt = select(Producto).where(and_(*conditions)).offset(skip).limit(limit)
-    result = await session.execute(stmt)
-    productos = result.scalars().all()
-    
-    # Contar total para paginación
-    count_stmt = select(func.count(Producto.id)).where(and_(*conditions))
-    count_result = await session.execute(count_stmt)
-    total = count_result.scalar()
-    if total is None:
-        total = 0
-    
-    # Procesar productos con stock calculado
-    productos_response = []
-    for producto in productos:
-        producto_dict = ProductoReadWithCalculatedStock.model_validate(producto).model_dump()
-        if producto.tipo == 'ropa':
-            producto_dict['stock_calculado'] = calcular_stock_ropa(producto)
-        productos_response.append(producto_dict)
-    
-    return {
-        "items": productos_response,
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "has_more": (skip + limit) < total
-    }
+        
+        # Construir respuesta
+        producto_read = ProductRead.model_validate(nuevo_producto)
+        producto_read.variants_count = len(variantes_creadas)
+        
+        variantes_read = []
+        for variante in variantes_creadas:
+            # Cargar relaciones de size y color
+            await session.refresh(variante, attribute_names=['size', 'color'])
+            variant_dict = ProductVariantRead.model_validate(variante).model_dump()
+            variant_dict['stock_total'] = await calculate_stock_by_variant(session, variante.variant_id)
+            variantes_read.append(ProductVariantRead(**variant_dict))
+        
+        return ProductCreateResponse(
+            product=producto_read,
+            variants_created=variantes_read,
+            inventory_transactions=transacciones_count
+        )
+        
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Error creando producto: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creando producto: {str(e)}"
+        )
 
 
-@router.get("/", response_model=List[ProductoReadWithCalculatedStock])
+# =====================================================
+# GET /productos - LISTAR PRODUCTOS
+# =====================================================
+
+@router.get("/", response_model=List[ProductRead])
 async def listar_productos(
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)],
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    search: Optional[str] = Query(None, description="Buscar por SKU o nombre"),
-    tipo: Optional[str] = Query(None, pattern="^(general|ropa|pesable)$"),
-    is_active: Optional[bool] = None
-) -> List[ProductoReadWithCalculatedStock]:
+    search: Optional[str] = Query(None, description="Buscar por nombre o base_sku"),
+    category: Optional[str] = Query(None),
+    is_active: Optional[bool] = True
+) -> List[ProductRead]:
     """
-    Lista productos de la tienda actual con filtros opcionales
+    Lista productos padre (sin variantes inline)
     
-    Filtros:
-    - search: Busca por SKU o nombre (case-insensitive)
-    - tipo: Filtra por tipo de producto
-    - is_active: Filtra por productos activos/inactivos
-    
-    ⚡ OPTIMIZADO: Índices en sku, nombre, is_active, tienda_id
+    Para ver las variantes,usar GET /productos/{id}/variants
     """
-    # Base query con filtro Multi-Tenant (⚡ usa índice ix_productos_tienda_id)
-    statement = select(Producto).where(Producto.tienda_id == current_tienda.id)
+    query = select(Product).where(Product.tienda_id == current_tienda.id)
     
-    # Aplicar filtros opcionales
     if search:
         search_pattern = f"%{search}%"
-        statement = statement.where(
-            (col(Producto.sku).ilike(search_pattern)) |
-            (col(Producto.nombre).ilike(search_pattern))
+        query = query.where(
+            (Product.name.ilike(search_pattern)) |
+            (Product.base_sku.ilike(search_pattern))
         )
     
-    if tipo:
-        statement = statement.where(Producto.tipo == tipo)
+    if category:
+        query = query.where(Product.category == category)
     
     if is_active is not None:
-        statement = statement.where(Producto.is_active == is_active)
+        query = query.where(Product.is_active == is_active)
     
-    # Paginación
-    statement = statement.offset(skip).limit(limit)
+    query = query.offset(skip).limit(limit).order_by(Product.created_at.desc())
     
-    result = await session.execute(statement)
+    result = await session.execute(query)
     productos = result.scalars().all()
     
-    # Agregar stock calculado para productos tipo ropa
+    # Contar variantes por producto
     productos_response = []
     for producto in productos:
-        producto_dict = ProductoReadWithCalculatedStock.model_validate(producto).model_dump()
+        producto_dict = ProductRead.model_validate(producto).model_dump()
         
-        if producto.tipo == 'ropa':
-            producto_dict['stock_calculado'] = calcular_stock_ropa(producto)
+        # Contar variantes activas
+        variants_count_query = select(func.count(ProductVariant.variant_id)).where(
+            ProductVariant.product_id == producto.product_id,
+            ProductVariant.is_active == True
+        )
+        variants_count_result = await session.execute(variants_count_query)
+        producto_dict['variants_count'] = variants_count_result.scalar()
         
-        productos_response.append(ProductoReadWithCalculatedStock(**producto_dict))
+        productos_response.append(ProductRead(**producto_dict))
     
     return productos_response
 
 
-@router.get("/{producto_id}", response_model=ProductoReadWithCalculatedStock)
+# =====================================================
+# GET /productos/{id} - DETALLE PRODUCTO
+# =====================================================
+
+@router.get("/{product_id}", response_model=ProductDetail)
 async def obtener_producto(
-    producto_id: UUID,
+    product_id: UUID,
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)]
-) -> ProductoReadWithCalculatedStock:
+) -> ProductDetail:
     """
-    Obtiene un producto específico por ID
-    Valida que pertenezca a la tienda actual (Multi-Tenant)
+    Obtiene detalle completo del producto CON variantes expandidas
     """
-    statement = select(Producto).where(
-        Producto.id == producto_id,
-        Producto.tienda_id == current_tienda.id
+    query = select(Product).options(
+        selectinload(Product.variants).selectinload(ProductVariant.size),
+        selectinload(Product.variants).selectinload(ProductVariant.color)
+    ).where(
+        Product.product_id == product_id,
+        Product.tienda_id == current_tienda.id
     )
-    result = await session.execute(statement)
+    
+    result = await session.execute(query)
     producto = result.scalar_one_or_none()
     
     if not producto:
@@ -264,92 +456,147 @@ async def obtener_producto(
             detail="Producto no encontrado"
         )
     
-    producto_dict = ProductoReadWithCalculatedStock.model_validate(producto).model_dump()
+    # Construir respuesta con variantes
+    producto_dict = ProductDetail.model_validate(producto).model_dump()
     
-    if producto.tipo == 'ropa':
-        producto_dict['stock_calculado'] = calcular_stock_ropa(producto)
+    # Agregar stock a cada variante
+    variantes_con_stock = []
+    for variante in producto.variants:
+        if variante.is_active:
+            variant_dict = ProductVariantRead.model_validate(variante).model_dump()
+            variant_dict['stock_total'] = await calculate_stock_by_variant(session, variante.variant_id)
+            variantes_con_stock.append(ProductVariantRead(**variant_dict))
     
-    return ProductoReadWithCalculatedStock(**producto_dict)
+    producto_dict['variants'] = variantes_con_stock
+    
+    return ProductDetail(**producto_dict)
 
 
-@router.patch("/{producto_id}", response_model=ProductoRead)
-async def actualizar_producto(
-    producto_id: UUID,
-    producto_update: ProductoUpdate,
+# =====================================================
+# GET /productos/{id}/variants - LISTAR VARIANTES
+# =====================================================
+
+@router.get("/{product_id}/variants", response_model=List[ProductVariantWithStock])
+async def listar_variantes_producto(
+    product_id: UUID,
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)]
-) -> Producto:
+) -> List[ProductVariantWithStock]:
     """
-    Actualiza un producto existente
-    
-    - Solo actualiza los campos enviados (PATCH parcial)
-    - Para productos tipo ropa, recalcula el stock si se actualizan las variantes
-    - Valida pertenencia a la tienda actual
+    Lista todas las variantes de un producto con stock por ubicación
     """
-    # Buscar producto
-    statement = select(Producto).where(
-        Producto.id == producto_id,
-        Producto.tienda_id == current_tienda.id
+    # Verificar que el producto existe y pertenece a la tienda
+    product_query = select(Product).where(
+        Product.product_id == product_id,
+        Product.tienda_id == current_tienda.id
     )
-    result = await session.execute(statement)
-    producto = result.scalar_one_or_none()
-    
-    if not producto:
+    product_result = await session.execute(product_query)
+    if not product_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Producto no encontrado"
         )
     
-    # Validar SKU único si se está actualizando
-    if producto_update.sku and producto_update.sku != producto.sku:
-        statement = select(Producto).where(
-            Producto.tienda_id == current_tienda.id,
-            Producto.sku == producto_update.sku
-        )
-        sku_check_result = await session.execute(statement)
-        existing_producto = sku_check_result.scalar_one_or_none()
+    # Obtener variantes
+    variants_query = select(ProductVariant).options(
+        selectinload(ProductVariant.size),
+        selectinload(ProductVariant.color)
+    ).where(
+        ProductVariant.product_id == product_id,
+        ProductVariant.is_active == True
+    )
+    
+    variants_result = await session.execute(variants_query)
+    variantes = variants_result.scalars().all()
+    
+    # Construir respuesta con stock por ubicación
+    variantes_response = []
+    for variante in variantes:
+        stock_by_loc = await get_stock_by_location(session, variante.variant_id)
+        total_stock = sum(loc['stock'] for loc in stock_by_loc)
         
-        if existing_producto is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Ya existe un producto con SKU '{producto_update.sku}' en esta tienda"
-            )
+        variantes_response.append(ProductVariantWithStock(
+            variant_id=variante.variant_id,
+            sku=variante.sku,
+            size_name=variante.size.name if variante.size else None,
+            color_name=variante.color.name if variante.color else None,
+            price=variante.price,
+            barcode=variante.barcode,
+            stock_by_location=stock_by_loc,
+            stock_total=total_stock
+        ))
     
-    # Actualizar campos
-    update_data = producto_update.model_dump(exclude_unset=True)
-    
-    # Recalcular stock para productos tipo ropa si se actualizan atributos
-    if 'atributos' in update_data and producto.tipo == 'ropa':
-        variantes = update_data['atributos'].get('variantes', [])
-        stock_total = sum(variante.get('stock', 0) for variante in variantes)
-        update_data['stock_actual'] = float(stock_total)
-    
-    for key, value in update_data.items():
-        setattr(producto, key, value)
-    
-    session.add(producto)
-    await session.commit()
-    await session.refresh(producto)
-    
-    return producto
+    return variantes_response
 
 
-@router.delete("/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar_producto(
-    producto_id: UUID,
+# =====================================================
+# GET /productos/variants/{variant_id}/stock
+# =====================================================
+
+@router.get("/variants/{variant_id}/stock", response_model=StockSummary)
+async def obtener_stock_variante(
+    variant_id: UUID,
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)]
-) -> None:
+) -> StockSummary:
     """
-    Elimina un producto (soft delete: marca como inactivo)
-    Validaciones Multi-Tenant aplicadas
+    Obtiene resumen de stock de una variante específica por ubicación
     """
-    statement = select(Producto).where(
-        Producto.id == producto_id,
-        Producto.tienda_id == current_tienda.id
+    # Obtener variante con relaciones
+    query = select(ProductVariant).options(
+        selectinload(ProductVariant.product),
+        selectinload(ProductVariant.size),
+        selectinload(ProductVariant.color)
+    ).where(
+        ProductVariant.variant_id == variant_id,
+        ProductVariant.tienda_id == current_tienda.id
     )
-    result = await session.execute(statement)
-    producto = result.scalar_one_or_none()
+    
+    result = await session.execute(query)
+    variante = result.scalar_one_or_none()
+    
+    if not variante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Variante no encontrada"
+        )
+    
+    # Obtener stock por ubicación
+    stock_by_loc = await get_stock_by_location(session, variant_id)
+    total_stock = sum(loc['stock'] for loc in stock_by_loc)
+    
+    return StockSummary(
+        variant_id=variant_id,
+        sku=variante.sku,
+        product_name=variante.product.name,
+        size_name=variante.size.name if variante.size else None,
+        color_name=variante.color.name if variante.color else None,
+        stock_by_location=stock_by_loc,
+        total_stock=total_stock
+    )
+
+
+# =====================================================
+# POST /productos/{id}/variants - AGREGAR VARIANTE
+# =====================================================
+
+@router.post("/{product_id}/variants", response_model=ProductVariantRead, status_code=status.HTTP_201_CREATED)
+async def agregar_variante(
+    product_id: UUID,
+    variant_data: AddVariantRequest,
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> ProductVariantRead:
+    """
+    Agrega una nueva variante a un producto existente
+    """
+    # Verificar producto
+    product_query = select(Product).where(
+        Product.product_id == product_id,
+        Product.tienda_id == current_tienda.id
+    )
+    product_result = await session.execute(product_query)
+    producto = product_result.scalar_one_or_none()
     
     if not producto:
         raise HTTPException(
@@ -357,39 +604,70 @@ async def eliminar_producto(
             detail="Producto no encontrado"
         )
     
-    # Soft delete
-    producto.is_active = False
-    session.add(producto)
-    await session.commit()
-
-
-@router.get("/sku/{sku}", response_model=ProductoReadWithCalculatedStock)
-async def buscar_por_sku(
-    sku: str,
-    current_tienda: CurrentTienda,
-    session: Annotated[AsyncSession, Depends(get_session)]
-) -> ProductoReadWithCalculatedStock:
-    """
-    Busca un producto por SKU dentro de la tienda actual
-    Útil para sistemas de punto de venta con escáner de códigos
-    """
-    statement = select(Producto).where(
-        Producto.sku == sku,
-        Producto.tienda_id == current_tienda.id,
-        Producto.is_active == True
+    # Obtener nombres de size y color
+    size_name = None
+    color_name = None
+    
+    if variant_data.size_id:
+        size = await session.get(Size, variant_data.size_id)
+        if not size or size.tienda_id != current_tienda.id:
+            raise HTTPException(status_code=404, detail="Talle no encontrado")
+        size_name = size.name
+    
+    if variant_data.color_id:
+        color = await session.get(Color, variant_data.color_id)
+        if not color or color.tienda_id != current_tienda.id:
+            raise HTTPException(status_code=404, detail="Color no encontrado")
+        color_name = color.name
+    
+    # Generar SKU
+    variant_sku = generate_variant_sku(producto.base_sku, color_name, size_name)
+    
+    # Validar SKU único
+    sku_check = select(ProductVariant).where(
+        ProductVariant.tienda_id == current_tienda.id,
+        ProductVariant.sku == variant_sku
     )
-    result = await session.execute(statement)
-    producto = result.scalar_one_or_none()
+    if (await session.execute(sku_check)).scalar_one_or_none():
+        raise HTTPException(status_code=400, detail=f"Variante con SKU '{variant_sku}' ya existe")
     
-    if not producto:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró un producto con SKU '{sku}'"
+    # Crear variante
+    nueva_variante = ProductVariant(
+        product_id=product_id,
+        tienda_id=current_tienda.id,
+        sku=variant_sku,
+        size_id=variant_data.size_id,
+        color_id=variant_data.color_id,
+        price=variant_data.price,
+        barcode=variant_data.barcode
+    )
+    session.add(nueva_variante)
+    await session.flush()
+    
+    # Crear stock inicial si hay
+    if variant_data.initial_stock > 0:
+        # Obtener ubicación default
+        default_location = (await session.execute(
+            select(Location).where(
+                Location.tienda_id == current_tienda.id,
+                Location.is_default == True
+            )
+        )).scalar_one()
+        
+        transaccion = InventoryLedger(
+            tienda_id=current_tienda.id,
+            variant_id=nueva_variante.variant_id,
+            location_id=variant_data.location_id or default_location.location_id,
+            delta=variant_data.initial_stock,
+            transaction_type='INITIAL_STOCK',
+            notes="Stock inicial al agregar variante"
         )
+        session.add(transaccion)
     
-    producto_dict = ProductoReadWithCalculatedStock.model_validate(producto).model_dump()
+    await session.commit()
+    await session.refresh(nueva_variante, attribute_names=['size', 'color'])
     
-    if producto.tipo == 'ropa':
-        producto_dict['stock_calculado'] = calcular_stock_ropa(producto)
+    variant_dict = ProductVariantRead.model_validate(nueva_variante).model_dump()
+    variant_dict['stock_total'] = await calculate_stock_by_variant(session, nueva_variante.variant_id)
     
-    return ProductoReadWithCalculatedStock(**producto_dict)
+    return ProductVariantRead(**variant_dict)

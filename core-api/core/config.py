@@ -23,9 +23,19 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_PORT: int = 5432
     
+    # 🔥 SUPABASE: URLs separadas para APP vs MIGRACIONES
+    # Si DATABASE_URL está definida directamente, usarla (Supabase)
+    # Si no, construirla desde componentes (Docker local)
+    DATABASE_URL: Optional[str] = None
+    DATABASE_MIGRATION_URL: Optional[str] = None
+    
     # === AGREGADO: Cola de Mensajes (RabbitMQ) ===
     RABBITMQ_URL: str = "amqp://user:pass@rabbitmq:5672/"
     # =============================================
+    
+    # === AGREGADO: Cache (Redis) - MÓDULO 3 ===
+    REDIS_URL: str = "redis://redis:6379/0"
+    # =========================================
 
     # Seguridad JWT
     SECRET_KEY: str
@@ -61,13 +71,35 @@ class Settings(BaseSettings):
         # Esto permite que Docker sobrescriba .env
     )
     
-    @property
-    def DATABASE_URL(self) -> str:
-        """Construye la URL de conexión a PostgreSQL"""
+    def get_database_url(self) -> str:
+        """
+        Retorna la URL de base de datos para la APP (FastAPI)
+        
+        Prioridad:
+        1. DATABASE_URL del .env (Supabase con puerto 6543 pooler)
+        2. Construcción desde componentes (Docker local)
+        """
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+    
+    def get_migration_url(self) -> str:
+        """
+        Retorna la URL de base de datos para MIGRACIONES (Alembic)
+        
+        Prioridad:
+        1. DATABASE_MIGRATION_URL del .env (Supabase con puerto 5432 directo)
+        2. DATABASE_URL (fallback)
+        3. Construcción desde componentes (Docker local)
+        """
+        if self.DATABASE_MIGRATION_URL:
+            return self.DATABASE_MIGRATION_URL
+        
+        return self.get_database_url()
 
 
 settings = Settings()

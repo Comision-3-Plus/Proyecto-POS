@@ -144,8 +144,11 @@ class VentaResumen(BaseModel):
     """
     Schema para mostrar resumen de venta después del checkout
     Información condensada para ticket/comprobante
+    
+    NOTA: venta_id es Optional porque en checkout event-driven
+    la venta se crea en el worker, no en el endpoint
     """
-    venta_id: UUID
+    venta_id: Optional[UUID] = None
     fecha: datetime
     total: float
     metodo_pago: str

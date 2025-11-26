@@ -4,11 +4,13 @@
 FROM python:3.11-slim
 
 # Instalar dependencias del sistema
+# 🔥 SUPABASE: ca-certificates necesario para SSL
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
     gcc \
     libpq-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Crear usuario no-root

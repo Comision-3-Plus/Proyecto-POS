@@ -9,15 +9,23 @@ from core.config import settings
 
 
 # Motor asíncrono de SQLAlchemy
+# 🔥 CONFIGURACIÓN OPTIMIZADA PARA SUPABASE PGBOUNCER
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.get_database_url(),
     echo=False,  # ⚡ OPTIMIZACIÓN: Desactivado para producción (reduce overhead 30%)
     future=True,
-    pool_pre_ping=True,
-    pool_size=50,  # ⚡ Aumentado de 10 a 50 para más concurrencia
-    max_overflow=100,  # ⚡ Aumentado de 20 a 100
+    pool_pre_ping=True,  # ✅ VITAL para conexiones cloud: verifica si están vivas
+    pool_size=20,  # ⚡ Reducido a 20 porque Supabase ya tiene su propio pool
+    max_overflow=10,  # ⚡ Reducido porque PgBouncer maneja la concurrencia
     pool_recycle=3600,  # ⚡ Reciclar conexiones cada hora para evitar stale connections
     pool_timeout=30,  # ⚡ Timeout de 30s para obtener conexión del pool
+    # 🚨 CRÍTICO PARA PGBOUNCER: Desactivar prepared statements
+    connect_args={
+        "server_settings": {
+            "jit": "off"  # Desactiva Just-In-Time compilation en serverless
+        },
+        "statement_cache_size": 0  # ⚠️ OBLIGATORIO: PgBouncer en modo transacción rota conexiones
+    }
 )
 
 # Session Factory asíncrona

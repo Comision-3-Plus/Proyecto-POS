@@ -58,19 +58,6 @@ type EmailAttachment struct {
 	ContentType string
 }
 
-// StockAlertData contiene los datos para alertas de stock
-type StockAlertData struct {
-	Titulo       string
-	Mensaje      string
-	Prioridad    string
-	AlertIcon    string
-	ProductName  string
-	CurrentStock int
-	Threshold    int
-	ActionURL    string
-	ActionText   string
-}
-
 // ==================== WELCOME EMAIL ====================
 
 // WelcomeEmailData contiene los datos para el template de bienvenida
@@ -216,53 +203,6 @@ func (c *Client) SendAlertEmail(toEmail, tipoAlerta string, data AlertEmailData)
 	}
 
 	subject := fmt.Sprintf("%s - %s", data.AlertIcon, data.Titulo)
-	return c.sendEmail(toEmail, "", subject, htmlContent, nil)
-}
-
-// SendStockAlertEmail envía una alerta de stock bajo
-func (c *Client) SendStockAlertEmail(toEmail, productName string, currentStock, threshold int) error {
-	if c.isDisabled {
-		log.Printf("📧 [MODO DEV] Alerta de stock simulada - Producto: %s (Stock: %d < %d)", productName, currentStock, threshold)
-		return nil
-	}
-
-	data := StockAlertData{
-		Titulo:       "⚠️ Alerta de Stock Bajo",
-		Mensaje:      fmt.Sprintf("El producto <strong>%s</strong> tiene solo %d unidades en stock (mínimo: %d).", productName, currentStock, threshold),
-		Prioridad:    "alta",
-		AlertIcon:    "⚠️",
-		ProductName:  productName,
-		CurrentStock: currentStock,
-		Threshold:    threshold,
-		ActionURL:    "https://blend.app/inventario",
-		ActionText:   "Ver Inventario",
-	}
-
-	htmlContent, err := c.renderTemplate("alert.html", data)
-	if err != nil {
-		// Fallback to simple HTML if template fails
-		htmlContent = fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px;">
-            <h2 style="color: #f59e0b; margin: 0 0 10px 0;">⚠️ Alerta de Stock Bajo</h2>
-            <p>El producto <strong>%s</strong> tiene solo <strong>%d unidades</strong> en stock.</p>
-            <p>Stock mínimo configurado: <strong>%d unidades</strong></p>
-            <p style="margin-top: 20px;">
-                <a href="https://blend.app/inventario" style="background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                    Ver Inventario
-                </a>
-            </p>
-        </div>
-    </div>
-</body>
-</html>`, productName, currentStock, threshold)
-	}
-
-	subject := fmt.Sprintf("⚠️ Stock Bajo - %s", productName)
 	return c.sendEmail(toEmail, "", subject, htmlContent, nil)
 }
 

@@ -9,6 +9,9 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB
 
+# Importar modelos de auditoría
+from models_audit import AuditLog, PermissionAudit  # noqa: F401
+
 
 class Tienda(SQLModel, table=True):
     """
@@ -54,6 +57,362 @@ class Tienda(SQLModel, table=True):
     proveedores: List["Proveedor"] = Relationship(back_populates="tienda")
     ordenes_compra: List["OrdenCompra"] = Relationship(back_populates="tienda")
     facturas: List["Factura"] = Relationship(back_populates="tienda")
+    
+    # Nuevas relaciones para inventory ledger
+    locations: List["Location"] = Relationship(back_populates="tienda")
+    sizes: List["Size"] = Relationship(back_populates="tienda")
+    colors: List["Color"] = Relationship(back_populates="tienda")
+    products: List["Product"] = Relationship(back_populates="tienda")
+
+
+# =====================================================
+# NUEVOS MODELOS: INVENTORY LEDGER SYSTEM
+# =====================================================
+
+class Size(SQLModel, table=True):
+    """
+    Modelo de Talle - Dimensión de producto
+    Catálogo de talles por tienda (S, M, L, XL, 38, 40, etc.)
+    """
+    __tablename__ = "sizes"
+    
+    id: int = Field(
+        default=None,
+        primary_key=True,
+        nullable=False
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece el talle"
+    )
+    name: str = Field(
+        max_length=20,
+        nullable=False,
+        description="Nombre del talle: S, M, L, 42, etc."
+    )
+    sort_order: int = Field(
+        default=0,
+        nullable=False,
+        description="Orden para mostrar (S=1, M=2, L=3, etc.)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    
+    # Relaciones
+    tienda: Optional["Tienda"] = Relationship(back_populates="sizes")
+    variants: List["ProductVariant"] = Relationship(back_populates="size")
+
+
+class Color(SQLModel, table=True):
+    """
+    Modelo de Color - Dimensión de producto
+    Catálogo de colores por tienda con código hex
+    """
+    __tablename__ = "colors"
+    
+    id: int = Field(
+        default=None,
+        primary_key=True,
+        nullable=False
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece el color"
+    )
+    name: str = Field(
+        max_length=50,
+        nullable=False,
+        description="Nombre del color: Rojo, Azul, Negro, etc."
+    )
+    hex_code: Optional[str] = Field(
+        default=None,
+        max_length=7,
+        nullable=True,
+        description="Código hexadecimal del color para UI: #FF0000"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    
+    # Relaciones
+    tienda: Optional["Tienda"] = Relationship(back_populates="colors")
+    variants: List["ProductVariant"] = Relationship(back_populates="color")
+
+
+class Location(SQLModel, table=True):
+    """
+    Modelo de Ubicación - Sucursal o Depósito
+    Soporte multi-sucursal nativo con auto-provisioning de default
+    """
+    __tablename__ = "locations"
+    
+    location_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        nullable=False,
+        alias="location_id"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece la ubicación"
+    )
+    name: str = Field(
+        max_length=100,
+        nullable=False,
+        description="Nombre de la ubicación: Sucursal Centro, Depósito Principal"
+    )
+    type: str = Field(
+        max_length=20,
+        nullable=False,
+        description="Tipo: STORE, WAREHOUSE, VIRTUAL"
+    )
+    address: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        nullable=True,
+        description="Dirección física de la ubicación"
+    )
+    is_default: bool = Field(
+        default=False,
+        nullable=False,
+        description="Si es la ubicación default de la tienda"
+    )
+    external_erp_id: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        description="ID externo para integración con ERP (Lince, etc.)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    
+    # Relaciones
+    tienda: Optional["Tienda"] = Relationship(back_populates="locations")
+    inventory_transactions: List["InventoryLedger"] = Relationship(back_populates="location")
+
+
+class Product(SQLModel, table=True):
+    """
+    Modelo de Producto Padre - Sin stock directo
+    El stock se calcula desde las variantes a través del ledger
+    """
+    __tablename__ = "products"
+    
+    product_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        nullable=False,
+        alias="product_id"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece el producto"
+    )
+    name: str = Field(
+        max_length=255,
+        nullable=False,
+        index=True,
+        description="Nombre del producto: Remera Básica, Pantalón Cargo, etc."
+    )
+    base_sku: str = Field(
+        max_length=50,
+        nullable=False,
+        index=True,
+        description="SKU base del producto (sin variante): REMERA-BASIC"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Descripción detallada del producto"
+    )
+    category: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="Categoría del producto: indumentaria, calzado, accesorios"
+    )
+    is_active: bool = Field(
+        default=True,
+        nullable=False,
+        index=True
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    )
+    
+    # Relaciones
+    tienda: Optional["Tienda"] = Relationship(back_populates="products")
+    variants: List["ProductVariant"] = Relationship(
+        back_populates="product",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
+
+class ProductVariant(SQLModel, table=True):
+    """
+    Modelo de Variante de Producto - Hijo con Talle/Color
+    Cada variante tiene su propio SKU único y precio
+    """
+    __tablename__ = "product_variants"
+    
+    variant_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        nullable=False,
+        alias="variant_id"
+    )
+    product_id: UUID = Field(
+        foreign_key="products.product_id",
+        nullable=False,
+        index=True,
+        description="ID del producto padre"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda (desnormalizado para performance)"
+    )
+    sku: str = Field(
+        max_length=100,
+        nullable=False,
+        index=True,
+        description="SKU único generado: BASE-COLOR-TALLE"
+    )
+    size_id: Optional[int] = Field(
+        default=None,
+        foreign_key="sizes.id",
+        nullable=True,
+        description="ID del talle (NULL para productos sin talle)"
+    )
+    color_id: Optional[int] = Field(
+        default=None,
+        foreign_key="colors.id",
+        nullable=True,
+        description="ID del color (NULL para productos sin color)"
+    )
+    price: float = Field(
+        nullable=False,
+        description="Precio de venta de esta variante"
+    )
+    barcode: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        index=True,
+        description="Código de barras EAN13 para escáner"
+    )
+    is_active: bool = Field(
+        default=True,
+        nullable=False,
+        index=True
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    
+    # Relaciones
+    product: Optional["Product"] = Relationship(back_populates="variants")
+    size: Optional["Size"] = Relationship(back_populates="variants")
+    color: Optional["Color"] = Relationship(back_populates="variants")
+    inventory_transactions: List["InventoryLedger"] = Relationship(
+        back_populates="variant",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
+
+class InventoryLedger(SQLModel, table=True):
+    """
+    Modelo de Libro Mayor de Inventario - APPEND ONLY
+    NUNCA se actualiza, solo se insertan transacciones
+    Stock actual = SUM(delta) WHERE variant_id = X AND location_id = Y
+    """
+    __tablename__ = "inventory_ledger"
+    
+    transaction_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        nullable=False,
+        alias="transaction_id"
+    )
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda (para particionamiento)"
+    )
+    variant_id: UUID = Field(
+        foreign_key="product_variants.variant_id",
+        nullable=False,
+        index=True,
+        description="ID de la variante del producto"
+    )
+    location_id: UUID = Field(
+        foreign_key="locations.location_id",
+        nullable=False,
+        index=True,
+        description="ID de la ubicación donde ocurre el movimiento"
+    )
+    delta: float = Field(
+        nullable=False,
+        description="Cambio en stock: +N entradas, -N salidas"
+    )
+    transaction_type: str = Field(
+        max_length=50,
+        nullable=False,
+        index=True,
+        description="Tipo: SALE, PURCHASE, RETURN, ADJUSTMENT, INITIAL_STOCK, TRANSFER"
+    )
+    reference_doc: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="ID de documento relacionado: venta_id, orden_compra_id, etc."
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Notas adicionales sobre la transacción"
+    )
+    occurred_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True, server_default=func.now()),
+        description="Cuándo ocurrió la transacción"
+    )
+    created_by: Optional[UUID] = Field(
+        default=None,
+        nullable=True,
+        description="ID del usuario que creó la transacción"
+    )
+    
+    # Relaciones
+    variant: Optional["ProductVariant"] = Relationship(back_populates="inventory_transactions")
+    location: Optional["Location"] = Relationship(back_populates="inventory_transactions")
+
+
+# =====================================================
+# FIN NUEVOS MODELOS - INVENTORY LEDGER
+# =====================================================
+
 
 
 class User(SQLModel, table=True):

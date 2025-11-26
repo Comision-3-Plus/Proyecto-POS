@@ -13,6 +13,7 @@ from core.config import settings
 from core.db import init_db
 from core.logging_config import setup_logging
 from core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
+from core.audit_middleware import AuditMiddleware
 from core.exceptions import (
     NexusPOSException,
     nexus_exception_handler,
@@ -21,7 +22,7 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras
+from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache
 
 
 @asynccontextmanager
@@ -76,9 +77,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Middleware de Request ID y Logging
+# Middleware de Request ID, Logging y Auditoría
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(RequestLoggingMiddleware, log_body=False)
+app.add_middleware(AuditMiddleware)  # ⭐ ENTERPRISE: Audit trails inmutables
 
 # Registrar handlers de excepciones
 app.add_exception_handler(NexusPOSException, nexus_exception_handler)
@@ -91,6 +93,8 @@ app.add_exception_handler(Exception, generic_exception_handler)
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(tiendas.router, prefix=settings.API_V1_STR)  # ⭐ NUEVO - Sistema Camaleón
 app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])  # ⭐ NUEVO
+app.include_router(sync.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 2 - Legacy Sync
+app.include_router(cache.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 3 - Redis Cache
 app.include_router(productos.router, prefix=settings.API_V1_STR)
 app.include_router(ventas.router, prefix=settings.API_V1_STR)
 app.include_router(payments.router, prefix=settings.API_V1_STR)

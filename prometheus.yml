@@ -1,0 +1,84 @@
+# Prometheus Configuration
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'nexuspos'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rule files
+rule_files:
+  # - "alert_rules.yml"
+
+# Scrape configs
+scrape_configs:
+  # =====================================================
+  # NEXUS POS API
+  # =====================================================
+  - job_name: 'nexuspos-api'
+    static_configs:
+      - targets: ['core-api:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # =====================================================
+  # WORKER SERVICE (Go)
+  # =====================================================
+  - job_name: 'nexuspos-worker'
+    static_configs:
+      - targets: ['worker-service:8080']
+    scrape_interval: 15s
+
+  # =====================================================
+  # SCHEDULER SERVICE (Go)
+  # =====================================================
+  - job_name: 'nexuspos-scheduler'
+    static_configs:
+      - targets: ['scheduler-service:8080']
+    scrape_interval: 30s
+
+  # =====================================================
+  # POSTGRES EXPORTER
+  # =====================================================
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # =====================================================
+  # REDIS EXPORTER
+  # =====================================================
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # =====================================================
+  # RABBITMQ EXPORTER
+  # =====================================================
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    scrape_interval: 30s
+
+  # =====================================================
+  # PROMETHEUS SELF-MONITORING
+  # =====================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # =====================================================
+  # JAEGER METRICS
+  # =====================================================
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+    scrape_interval: 30s

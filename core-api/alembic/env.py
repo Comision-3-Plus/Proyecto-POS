@@ -27,8 +27,9 @@ if config.config_file_name is not None:
 # Metadata de SQLModel (incluye todos los modelos importados)
 target_metadata = SQLModel.metadata
 
-# Sobrescribir la URL de conexión con la del .env
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# 🔥 SUPABASE: Usar URL de MIGRACIÓN (puerto 5432 directo)
+# PgBouncer (puerto 6543) NO soporta comandos DDL (CREATE TABLE, ALTER, etc.)
+config.set_main_option("sqlalchemy.url", settings.get_migration_url())
 
 
 def run_migrations_offline() -> None:

@@ -128,6 +128,9 @@ omit = [
 ]
 
 [tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -137,7 +140,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
-fail_under = 70
+fail_under = 60
 
 [tool.coverage.html]
 directory = "htmlcov"

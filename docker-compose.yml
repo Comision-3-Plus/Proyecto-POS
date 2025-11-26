@@ -16,11 +16,31 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexuspos} -d ${POSTGRES_DB:-nexus_pos}"]
       interval: 5s
       timeout: 5s
+      retries: 5
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 1.5. MEMORIA ULTRA-RÁPIDA (El Patovica - Redis para Cache & Locking)
+  # ----------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: blend_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
     networks:
       - super_network
@@ -45,6 +65,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 2.5 LEGACY DB (LA VÍCTIMA - SQL Server simulando Lince/Zoo Logic)
+  # ----------------------------------------------------------------
+  legacy_db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: lince_simulator
+    restart: unless-stopped
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Password123!  # Contraseña insegura típica de local de ropa
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - legacy_db_data:/var/opt/mssql
+      - ./legacy-sim:/docker-entrypoint-initdb.d  # Scripts de inicialización
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Password123! -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - super_network
 
@@ -76,13 +121,13 @@ services:
       # Security & Apps
       SECRET_KEY: ${SECRET_KEY:-cambiar_esto_en_prod_por_favor}
       ALGORITHM: HS256
-      BACKEND_CORS_ORIGINS: "*"
+      BACKEND_CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
       
       # Integraciones
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
       AFIP_PRODUCTION: "False"
     ports:
-      - "8001:8000"
+      - "8000:8000"
     networks:
       - super_network
 
@@ -126,7 +171,50 @@ services:
       - super_network
 
   # ----------------------------------------------------------------
-  # 6. ADMINER (Utilidad DB)
+  # 5.5. SHOPIFY/MELI WORKER (El Sincronizador - Go Worker)
+  # ----------------------------------------------------------------
+  shopify_worker:
+    build:
+      context: ./worker-service
+      dockerfile: Dockerfile
+    container_name: blend_shopify_worker
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
+      QUEUE_NAME: "queue.sales.created"
+      SHOPIFY_URL: "${SHOPIFY_URL:-https://blend-pos.myshopify.com}"
+      SHOPIFY_TOKEN: "${SHOPIFY_TOKEN:-mock-token}"
+      MELI_URL: "${MELI_URL:-https://api.mercadolibre.com}"
+      MELI_TOKEN: "${MELI_TOKEN:-mock-token}"
+      WORKER_ID: "shopify-worker-1"
+      MAX_RETRIES: "3"
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 6. FRONTEND (La Cara - Next.js de Lautaro)
+  # ----------------------------------------------------------------
+  frontend:
+    build:
+      context: ./web-portal
+      dockerfile: Dockerfile
+    container_name: super_pos_frontend
+    restart: unless-stopped
+    depends_on:
+      - core_api
+    environment:
+      # El frontend habla con TU API (Python)
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    networks:
+      - super_network
+
+  # ----------------------------------------------------------------
+  # 7. ADMINER (Utilidad DB)
   # ----------------------------------------------------------------
   adminer:
     image: adminer:latest
@@ -145,6 +233,8 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  legacy_db_data:  # SQL Server data persistence
+  redis_data:      # Redis persistence (AOF)
 
 networks:
   super_network:

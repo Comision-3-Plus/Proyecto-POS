@@ -9,7 +9,7 @@ from typing import List
 from pydantic import BaseModel, EmailStr
 from core.db import get_session
 from api.deps import get_current_user
-from models import User, Tienda
+from models import User, Tienda, Location, Size, Color
 from core.security import get_password_hash
 import uuid
 
@@ -101,16 +101,70 @@ async def create_tienda(
     db: AsyncSession = Depends(get_session),
     admin: User = Depends(require_super_admin)
 ):
-    """Crear una nueva tienda"""
-    nueva_tienda = Tienda(
-        id=uuid.uuid4(),
-        nombre=tienda_data.nombre,
-        rubro=tienda_data.rubro.lower()
-    )
-    db.add(nueva_tienda)
-    await db.commit()
-    await db.refresh(nueva_tienda)
-    return TiendaResponse.from_orm(nueva_tienda)
+    """
+    Crear una nueva tienda con auto-provisioning de recursos básicos
+    
+    🚀 AUTO-CREACIÓN:
+    - Location Default "Depósito Central"
+    - Talles básicos: S, M, L, XL
+    - Colores básicos: Negro, Blanco
+    
+    Esto previene el "zombi tenant" - tiendas sin ubicación default
+    """
+    try:
+        # 1. Crear la Tienda
+        nueva_tienda = Tienda(
+            id=uuid.uuid4(),
+            nombre=tienda_data.nombre,
+            rubro=tienda_data.rubro.lower(),
+            is_active=True
+        )
+        db.add(nueva_tienda)
+        await db.flush()  # Obtener ID sin hacer commit aún
+        
+        # 2. OBLIGATORIO: Crear Location Default
+        default_location = Location(
+            tienda_id=nueva_tienda.id,
+            name="Depósito Central",
+            type="WAREHOUSE",
+            is_default=True,
+            address=tienda_data.nombre  # Usar nombre de tienda como dirección default
+        )
+        db.add(default_location)
+        
+        # 3. RECOMENDADO: Crear talles básicos para que el usuario no arranque en blanco
+        sizes_basicos = ["S", "M", "L", "XL"]
+        for i, s in enumerate(sizes_basicos):
+            db.add(Size(
+                tienda_id=nueva_tienda.id,
+                name=s,
+                sort_order=i
+            ))
+        
+        # 4. RECOMENDADO: Crear colores básicos
+        colores_basicos = [
+            ("Negro", "#000000"),
+            ("Blanco", "#FFFFFF")
+        ]
+        for c_name, c_hex in colores_basicos:
+            db.add(Color(
+                tienda_id=nueva_tienda.id,
+                name=c_name,
+                hex_code=c_hex
+            ))
+        
+        # 5. Commit transaccional (si algo falla, se revierte todo)
+        await db.commit()
+        await db.refresh(nueva_tienda)
+        
+        return TiendaResponse.from_orm(nueva_tienda)
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creando tienda: {str(e)}"
+        )
 
 
 @router.get("/usuarios", response_model=List[UsuarioResponse])
@@ -238,57 +292,104 @@ async def onboarding_tienda(
     """
     🎯 Endpoint combinado: Crear tienda + usuario dueño en un solo paso
     Ideal para dar de alta rápidamente a nuevos clientes como "Pedrito el verdulero"
+    
+    🚀 AUTO-CREACIÓN:
+    - Location Default "Depósito Central"
+    - Talles básicos: S, M, L, XL
+    - Colores básicos: Negro, Blanco
     """
     
-    # 1. Verificar que no exista el email
-    result = await db.execute(select(User).where(User.email == data.email))
-    existing = result.scalar_one_or_none()
-    if existing:
+    try:
+        # 1. Verificar que no exista el email
+        result = await db.execute(select(User).where(User.email == data.email))
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El email {data.email} ya está registrado"
+            )
+        
+        # 2. Crear la tienda
+        nueva_tienda = Tienda(
+            id=uuid.uuid4(),
+            nombre=data.nombre_tienda,
+            rubro=data.rubro.lower(),
+            is_active=True
+        )
+        db.add(nueva_tienda)
+        await db.flush()  # Flush para obtener el ID sin commit
+        
+        # 3. OBLIGATORIO: Crear Location Default
+        default_location = Location(
+            tienda_id=nueva_tienda.id,
+            name="Depósito Central",
+            type="WAREHOUSE",
+            is_default=True,
+            address=data.nombre_tienda
+        )
+        db.add(default_location)
+        
+        # 4. RECOMENDADO: Crear talles básicos
+        sizes_basicos = ["S", "M", "L", "XL"]
+        for i, s in enumerate(sizes_basicos):
+            db.add(Size(
+                tienda_id=nueva_tienda.id,
+                name=s,
+                sort_order=i
+            ))
+        
+        # 5. RECOMENDADO: Crear colores básicos
+        colores_basicos = [
+            ("Negro", "#000000"),
+            ("Blanco", "#FFFFFF")
+        ]
+        for c_name, c_hex in colores_basicos:
+            db.add(Color(
+                tienda_id=nueva_tienda.id,
+                name=c_name,
+                hex_code=c_hex
+            ))
+        
+        # 6. Crear el usuario dueño
+        nuevo_usuario = User(
+            id=uuid.uuid4(),
+            email=data.email,
+            hashed_password=get_password_hash(data.password),
+            full_name=data.nombre_completo,
+            rol=data.rol,
+            tienda_id=nueva_tienda.id,
+            is_active=True
+        )
+        db.add(nuevo_usuario)
+        
+        # 7. Commit transaccional (si algo falla, se revierte todo)
+        await db.commit()
+        await db.refresh(nueva_tienda)
+        await db.refresh(nuevo_usuario)
+        
+        return OnboardingResponse(
+            tienda=TiendaResponse(
+                id=str(nueva_tienda.id),
+                nombre=nueva_tienda.nombre,
+                rubro=nueva_tienda.rubro,
+                is_active=nueva_tienda.is_active
+            ),
+            usuario=UsuarioResponse(
+                id=str(nuevo_usuario.id),
+                email=nuevo_usuario.email,
+                full_name=nuevo_usuario.full_name,
+                rol=nuevo_usuario.rol,
+                tienda_id=str(nuevo_usuario.tienda_id),
+                is_active=nuevo_usuario.is_active
+            )
+        )
+        
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El email {data.email} ya está registrado"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error en onboarding: {str(e)}"
         )
-    
-    # 2. Crear la tienda
-    nueva_tienda = Tienda(
-        id=uuid.uuid4(),
-        nombre=data.nombre_tienda,
-        rubro=data.rubro.lower(),
-        is_active=True
-    )
-    db.add(nueva_tienda)
-    await db.flush()  # Flush para obtener el ID sin commit
-    
-    # 3. Crear el usuario dueño
-    nuevo_usuario = User(
-        id=uuid.uuid4(),
-        email=data.email,
-        hashed_password=get_password_hash(data.password),
-        full_name=data.nombre_completo,
-        rol=data.rol,
-        tienda_id=nueva_tienda.id,
-        is_active=True
-    )
-    db.add(nuevo_usuario)
-    
-    # 4. Commit transaccional (si algo falla, se revierte todo)
-    await db.commit()
-    await db.refresh(nueva_tienda)
-    await db.refresh(nuevo_usuario)
-    
-    return OnboardingResponse(
-        tienda=TiendaResponse(
-            id=str(nueva_tienda.id),
-            nombre=nueva_tienda.nombre,
-            rubro=nueva_tienda.rubro,
-            is_active=nueva_tienda.is_active
-        ),
-        usuario=UsuarioResponse(
-            id=str(nuevo_usuario.id),
-            email=nuevo_usuario.email,
-            full_name=nuevo_usuario.full_name,
-            rol=nuevo_usuario.rol,
-            tienda_id=str(nuevo_usuario.tienda_id),
-            is_active=nuevo_usuario.is_active
-        )
-    )

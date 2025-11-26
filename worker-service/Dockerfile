@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Compilar el binario
-RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
 
 # Stage 2: Runtime
 FROM alpine:latest

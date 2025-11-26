@@ -10,8 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlmodel import col
 from core.db import get_session
-from core.event_bus import publish_event
+from core.event_bus import publish_event, sync_event_publisher
 from core.permissions import Permission, require_permission
+from core.redis_scripts import RESERVE_STOCK_SCRIPT, ROLLBACK_STOCK_SCRIPT, generate_stock_key
+import redis.asyncio as redis
+from core.config import settings
 from api.deps import CurrentUser
 from models import Producto, Venta, DetalleVenta, Factura
 from schemas_models.ventas import (
@@ -93,21 +96,45 @@ async def procesar_venta(
     session: Annotated[AsyncSession, Depends(get_session)]
 ) -> VentaResumen:
     """
-    ENDPOINT DE CHECKOUT - TRANSACCIÓN CRÍTICA
+    🚀 MÓDULO 3: CHECKOUT CON REDIS + RABBITMQ
+    
+    FLUJO EVENT-DRIVEN:
+    1. Reserva atómica de stock en Redis (Lua script)
+    2. Publicación de evento a RabbitMQ
+    3. Worker consume y escribe en PostgreSQL async
+    4. Respuesta inmediata al cliente (< 50ms)
+    
+    VENTAJAS:
+    - Sin race conditions (Lua garantiza atomicidad)
+    - Sin SELECT FOR UPDATE (mejor performance)
+    - Respuesta ultra rápida al POS
+    - Escritura en DB desacoplada (worker)
     """
+    redis_client = None
+    reserved_keys = []  # Para rollback si falla
+    
     try:
-        # Variables para acumular datos
-        total_venta = 0.0
-        detalles_a_crear = []
-        productos_a_actualizar = []
+        # ============================================================
+        # PASO 1: CONECTAR A REDIS
+        # ============================================================
+        redis_client = redis.Redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True
+        )
         
-        # PASO 1: Validar y bloquear productos
+        # ============================================================
+        # PASO 2: VALIDAR PRODUCTOS Y CALCULAR TOTALES
+        # ============================================================
+        total_venta = 0.0
+        items_validados = []
+        
         for item in venta_data.items:
-            # SELECT FOR UPDATE: Bloquea la fila hasta el commit
+            # Leer producto desde PostgreSQL (lectura sin lock)
             statement = select(Producto).where(
                 Producto.id == item.producto_id,
                 Producto.tienda_id == current_tienda.id
-            ).with_for_update()
+            )
             
             result = await session.execute(statement)
             producto = result.scalar_one_or_none()
@@ -115,7 +142,7 @@ async def procesar_venta(
             if not producto:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Producto con ID {item.producto_id} no encontrado en esta tienda"
+                    detail=f"Producto con ID {item.producto_id} no encontrado"
                 )
             
             if not producto.is_active:
@@ -124,102 +151,128 @@ async def procesar_venta(
                     detail=f"El producto '{producto.nombre}' (SKU: {producto.sku}) está inactivo"
                 )
             
-            if producto.stock_actual < item.cantidad:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Stock insuficiente para '{producto.nombre}' (SKU: {producto.sku}). "
-                        f"Disponible: {producto.stock_actual}, Solicitado: {item.cantidad}"
-                    )
-                )
-            
             if producto.tipo != 'pesable' and item.cantidad != int(item.cantidad):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"El producto '{producto.nombre}' no permite cantidades decimales"
                 )
             
-            # PASO 2: Calcular subtotal y preparar descuento de stock
             subtotal = producto.precio_venta * item.cantidad
             total_venta += subtotal
             
-            producto.stock_actual -= item.cantidad
-            productos_a_actualizar.append(producto)
-            
-            detalles_a_crear.append({
-                'producto_id': producto.id,
+            items_validados.append({
+                'producto_id': str(producto.id),
                 'producto_nombre': producto.nombre,
                 'producto_sku': producto.sku,
-                'cantidad': item.cantidad,
-                'precio_unitario': producto.precio_venta,
-                'subtotal': subtotal
+                'cantidad': float(item.cantidad),
+                'precio_unitario': float(producto.precio_venta),
+                'subtotal': float(subtotal)
             })
         
-        # PASO 3: Crear la venta (cabecera)
-        nueva_venta = Venta(
-            tienda_id=current_tienda.id,
-            total=total_venta,
-            metodo_pago=venta_data.metodo_pago
-        )
-        
-        session.add(nueva_venta)
-        await session.flush()
-        
-        # PASO 4: Crear los detalles de venta
-        for detalle_data in detalles_a_crear:
-            detalle = DetalleVenta(
-                venta_id=nueva_venta.id,
-                producto_id=detalle_data['producto_id'],
-                cantidad=detalle_data['cantidad'],
-                precio_unitario=detalle_data['precio_unitario'],
-                subtotal=detalle_data['subtotal']
+        # ============================================================
+        # PASO 3: RESERVA ATÓMICA EN REDIS (LUA SCRIPT)
+        # ============================================================
+        for item_data in items_validados:
+            stock_key = generate_stock_key(
+                str(current_tienda.id),
+                item_data['producto_id']
             )
-            session.add(detalle)
+            
+            # Ejecutar script Lua para reserva atómica
+            result = await redis_client.eval(
+                RESERVE_STOCK_SCRIPT,
+                1,  # num_keys
+                stock_key,
+                item_data['cantidad']
+            )
+            
+            if result == -2:
+                # Cache miss - necesita warmup
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Stock no cacheado para SKU {item_data['producto_sku']}. Reintente."
+                )
+            
+            if result == -1:
+                # Stock insuficiente
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Stock insuficiente para '{item_data['producto_nombre']}' "
+                        f"(SKU: {item_data['producto_sku']}). Reintente."
+                    )
+                )
+            
+            # Reserva exitosa
+            reserved_keys.append(stock_key)
         
-        # PASO 5: Actualizar stock de productos
-        for producto in productos_a_actualizar:
-            session.add(producto)
+        # ============================================================
+        # PASO 4: PUBLICAR EVENTO A RABBITMQ (SYNC)
+        # ============================================================
+        sale_event = {
+            'tienda_id': str(current_tienda.id),
+            'total': total_venta,
+            'metodo_pago': venta_data.metodo_pago,
+            'items': items_validados,
+            'timestamp': datetime.utcnow().isoformat()
+        }
         
-        # PASO 6: COMMIT ATÓMICO
-        await session.commit()
+        with sync_event_publisher() as publisher:
+            publisher.publish_sale_created(sale_event)
         
-        # =================================================================
-        # 🐰 PASO EXTRA: PUBLICAR EVENTO A RABBITMQ (INTEGRACIÓN GO)
-        # =================================================================
-        try:
-            await publish_event("ventas_procesadas", {
-                "evento": "NUEVA_VENTA",
-                "venta_id": str(nueva_venta.id),
-                "tienda_id": str(current_tienda.id),
-                "total": float(nueva_venta.total),
-                "metodo_pago": nueva_venta.metodo_pago,
-                # "email_cliente": venta_data.email_cliente, # Descomentar si agregas email al esquema
-                "items_count": len(detalles_a_crear)
-            })
-        except Exception as e:
-            # Solo logueamos, no rompemos la venta ya confirmada
-            print(f"⚠️ Warning: No se pudo enviar evento a RabbitMQ: {e}")
-        # =================================================================
-
+        # ============================================================
+        # PASO 5: RESPUESTA INMEDIATA (Worker escribirá en DB)
+        # ============================================================
         return VentaResumen(
-            venta_id=nueva_venta.id,
-            fecha=nueva_venta.fecha,
-            total=nueva_venta.total,
-            metodo_pago=nueva_venta.metodo_pago,
-            cantidad_items=len(detalles_a_crear),
-            mensaje="Venta procesada exitosamente"
+            venta_id=None,  # Se generará en el worker
+            fecha=datetime.utcnow(),
+            total=total_venta,
+            metodo_pago=venta_data.metodo_pago,
+            cantidad_items=len(items_validados),
+            mensaje="✅ Venta reservada - procesando en segundo plano"
         )
     
     except HTTPException:
-        await session.rollback()
+        # Rollback de reservas en Redis si hubo error
+        if redis_client and reserved_keys:
+            for stock_key in reserved_keys:
+                cantidad_reservada = next(
+                    (item['cantidad'] for item in items_validados 
+                     if generate_stock_key(str(current_tienda.id), item['producto_id']) == stock_key),
+                    0
+                )
+                await redis_client.eval(
+                    ROLLBACK_STOCK_SCRIPT,
+                    1,
+                    stock_key,
+                    cantidad_reservada
+                )
         raise
     
     except Exception as e:
-        await session.rollback()
+        # Rollback en caso de error inesperado
+        if redis_client and reserved_keys:
+            for stock_key in reserved_keys:
+                cantidad_reservada = next(
+                    (item['cantidad'] for item in items_validados 
+                     if generate_stock_key(str(current_tienda.id), item['producto_id']) == stock_key),
+                    0
+                )
+                await redis_client.eval(
+                    ROLLBACK_STOCK_SCRIPT,
+                    1,
+                    stock_key,
+                    cantidad_reservada
+                )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al procesar la venta: {str(e)}"
         )
+    
+    finally:
+        if redis_client:
+            await redis_client.aclose()
 
 
 @router.get("/", response_model=List[VentaListRead])
