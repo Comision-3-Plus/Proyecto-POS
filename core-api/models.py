@@ -12,6 +12,38 @@ from sqlalchemy.dialects.postgresql import JSONB
 # Importar modelos de auditoría
 from models_audit import AuditLog, PermissionAudit  # noqa: F401
 
+# Importar modelos adicionales de schemas_models
+from schemas_models.ecommerce_models import (  # noqa: F401
+    IntegracionEcommerce,
+    SyncLog,
+    ProductMapping,
+    APIKey
+)
+from schemas_models.loyalty_models import (  # noqa: F401
+    CustomerWallet,
+    WalletTransaction,
+    GiftCard,
+    GiftCardUso,
+    LoyaltyProgram
+)
+from schemas_models.promo_models import (  # noqa: F401
+    Promocion,
+    PromocionUso
+)
+from schemas_models.rfid_models import (  # noqa: F401
+    RFIDTag,
+    RFIDScanSession,
+    RFIDScanItem,
+    RFIDReader,
+    RFIDInventoryDiscrepancy
+)
+from schemas_models.oms_models import (  # noqa: F401
+    OrdenOmnicanal,
+    OrdenItem,
+    ShippingZone,
+    LocationCapability
+)
+
 
 class Tienda(SQLModel, table=True):
     """
@@ -49,6 +81,7 @@ class Tienda(SQLModel, table=True):
     
     # Relaciones
     users: List["User"] = Relationship(back_populates="tienda")
+    clientes: List["Cliente"] = Relationship(back_populates="tienda")
     productos: List["Producto"] = Relationship(back_populates="tienda")
     ventas: List["Venta"] = Relationship(back_populates="tienda")
     insights: List["Insight"] = Relationship(back_populates="tienda")
@@ -468,6 +501,107 @@ class User(SQLModel, table=True):
     # Relaciones
     tienda: Optional[Tienda] = Relationship(back_populates="users")
     sesiones_caja: List["SesionCaja"] = Relationship(back_populates="usuario")
+
+
+class Cliente(SQLModel, table=True):
+    """
+    Modelo de Cliente - CRM básico multi-tenant
+    Registro de clientes para fidelización, historial y marketing
+    """
+    __tablename__ = "clientes"
+    
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        index=True,
+        nullable=False
+    )
+    nombre: str = Field(
+        max_length=255,
+        nullable=False,
+        index=True,
+        description="Nombre completo del cliente"
+    )
+    email: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        nullable=True,
+        index=True,
+        description="Email del cliente para marketing y notificaciones"
+    )
+    telefono: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        description="Teléfono de contacto"
+    )
+    documento_tipo: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        nullable=True,
+        description="Tipo de documento: DNI, CUIL, CUIT, PASAPORTE"
+    )
+    documento_numero: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        nullable=True,
+        index=True,
+        description="Número de documento"
+    )
+    fecha_nacimiento: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        description="Fecha de nacimiento para birthday rewards"
+    )
+    direccion: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Dirección del cliente"
+    )
+    ciudad: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True
+    )
+    provincia: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True
+    )
+    codigo_postal: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        nullable=True
+    )
+    notas: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Notas internas sobre el cliente"
+    )
+    is_active: bool = Field(
+        default=True,
+        nullable=False,
+        index=True
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    )
+    
+    # Columna discriminadora Multi-Tenant (CRÍTICA)
+    tienda_id: UUID = Field(
+        foreign_key="tiendas.id",
+        nullable=False,
+        index=True,
+        description="ID de la tienda a la que pertenece el cliente"
+    )
+    
+    # Relaciones
+    tienda: Optional[Tienda] = Relationship(back_populates="clientes")
 
 
 class Producto(SQLModel, table=True):
@@ -1053,7 +1187,6 @@ class Factura(SQLModel, table=True):
         description="Código de Autorización Electrónica de AFIP"
     )
     vencimiento_cae: datetime = Field(
-        nullable=False,
         sa_column=Column(DateTime(timezone=True), nullable=False),
         description="Fecha de vencimiento del CAE"
     )

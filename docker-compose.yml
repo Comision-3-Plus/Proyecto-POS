@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ----------------------------------------------------------------
   # 1. BASE DE DATOS (El Corazón - Postgres 17 de Nexus)
@@ -105,15 +103,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
       # Conexión DB
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-nexuspos}:${POSTGRES_PASSWORD:-nexuspos_secret}@db:5432/${POSTGRES_DB:-nexus_pos}"
       POSTGRES_SERVER: db
       POSTGRES_USER: ${POSTGRES_USER:-nexuspos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexuspos_secret}
       POSTGRES_DB: ${POSTGRES_DB:-nexus_pos}
       POSTGRES_PORT: 5432
+      
+      # Redis
+      REDIS_URL: "redis://redis:6379/0"
       
       # Conexión RabbitMQ (Para enviar tareas a Franco)
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
@@ -124,10 +128,10 @@ services:
       BACKEND_CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
       
       # Integraciones
-      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-test}
       AFIP_PRODUCTION: "False"
     ports:
-      - "8000:8000"
+      - "8001:8000"
     networks:
       - super_network
 
@@ -195,23 +199,23 @@ services:
       - super_network
 
   # ----------------------------------------------------------------
-  # 6. FRONTEND (La Cara - Next.js de Lautaro)
+  # 6. FRONTEND (La Cara - Next.js de Lautaro) - COMENTADO POR AHORA
   # ----------------------------------------------------------------
-  frontend:
-    build:
-      context: ./web-portal
-      dockerfile: Dockerfile
-    container_name: super_pos_frontend
-    restart: unless-stopped
-    depends_on:
-      - core_api
-    environment:
-      # El frontend habla con TU API (Python)
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-    ports:
-      - "3000:3000"
-    networks:
-      - super_network
+  # frontend:
+  #   build:
+  #     context: ./web-portal
+  #     dockerfile: Dockerfile
+  #   container_name: super_pos_frontend
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - core_api
+  #   environment:
+  #     # El frontend habla con TU API (Python)
+  #     NEXT_PUBLIC_API_URL: http://localhost:8001
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - super_network
 
   # ----------------------------------------------------------------
   # 7. ADMINER (Utilidad DB)

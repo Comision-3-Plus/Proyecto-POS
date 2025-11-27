@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         enable_json=False  # True para producción
     )
     
+    
     logger = logging.getLogger(__name__)
     logger.info("=" * 50)
     logger.info(f"Iniciando {settings.PROJECT_NAME} v{settings.VERSION}")
@@ -46,8 +47,11 @@ async def lifespan(app: FastAPI):
     
     # Startup: Crear tablas en desarrollo
     # En producción usar Alembic para migraciones
-    await init_db()
-    logger.info("Base de datos inicializada correctamente")
+    try:
+        await init_db()
+        logger.info("Base de datos inicializada correctamente")
+    except Exception as e:
+        logger.warning(f"No se pudieron crear tablas (puede ser normal): {e}")
     
     yield
     

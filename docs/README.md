@@ -1,4 +1,0 @@
-# docs
-
-Documentacion del proyecto
-

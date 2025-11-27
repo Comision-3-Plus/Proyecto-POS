@@ -77,6 +77,75 @@ async def login(
     )
 
 
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
+async def register(
+    email: str,
+    password: str,
+    nombre: str,
+    apellido: str,
+    tienda_nombre: str,
+    session: Annotated[AsyncSession, Depends(get_session)]
+) -> Token:
+    """
+    Registro de nuevo usuario con tienda
+    Solo para testing - En producción usar sistema de invitaciones
+    """
+    from core.security import get_password_hash
+    from models import Tienda
+    
+    # Verificar si ya existe
+    existing = await session.exec(select(User).where(User.email == email))
+    if existing.first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email ya registrado"
+        )
+    
+    # Crear tienda
+    tienda = Tienda(
+        nombre=tienda_nombre,
+        rubro="retail",
+        is_active=True
+    )
+    session.add(tienda)
+    await session.flush()
+    
+    # Crear usuario
+    user = User(
+        email=email,
+        hashed_password=get_password_hash(password),
+        nombre=nombre,
+        apellido=apellido,
+        rol="owner",
+        tienda_id=tienda.id,
+        is_active=True
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    await session.refresh(user, ["tienda"])
+    
+    # Crear token
+    access_token = create_access_token(data={"sub": str(user.id)})
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "rol": user.rol,
+            "tienda_id": str(user.tienda_id),
+            "tienda": {
+                "id": str(user.tienda.id),
+                "nombre": user.tienda.nombre,
+                "rubro": user.tienda.rubro,
+            } if user.tienda else None
+        }
+    )
+
+
 @router.post("/login/form", response_model=Token)
 async def login_form(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
