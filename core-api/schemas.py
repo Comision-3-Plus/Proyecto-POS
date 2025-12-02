@@ -92,3 +92,13 @@ class LoginRequest(BaseModel):
     """Schema de request para login"""
     email: EmailStr
     password: str
+
+
+class RegisterRequest(BaseModel):
+    """Schema de request para registro público"""
+    email: EmailStr
+    password: str = Field(..., min_length=8, description="Contraseña mínimo 8 caracteres")
+    full_name: str = Field(..., min_length=2, max_length=255, description="Nombre completo")
+    documento_numero: str = Field(..., min_length=7, max_length=20, description="DNI/CUIT sin puntos ni guiones")
+    tienda_nombre: str = Field(..., min_length=2, max_length=255, description="Nombre de tu negocio")
+    tienda_rubro: str = Field(..., min_length=2, max_length=100, description="Tipo de negocio: indumentaria, farmacia, verduleria, etc.")

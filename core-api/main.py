@@ -22,7 +22,7 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache
+from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache, usuarios
 
 
 @asynccontextmanager
@@ -75,7 +75,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)  # Comprimir respuestas > 
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=settings.CORS_ORIGINS_LIST,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +95,7 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 # Registro de rutas
 app.include_router(auth.router, prefix=settings.API_V1_STR)
+app.include_router(usuarios.router, prefix=settings.API_V1_STR)  # ⭐ Gestión de empleados
 app.include_router(tiendas.router, prefix=settings.API_V1_STR)  # ⭐ NUEVO - Sistema Camaleón
 app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])  # ⭐ NUEVO
 app.include_router(sync.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 2 - Legacy Sync

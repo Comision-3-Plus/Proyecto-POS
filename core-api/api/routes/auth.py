@@ -10,7 +10,7 @@ from sqlmodel import select
 from core.db import get_session
 from core.security import verify_password, create_access_token
 from models import User
-from schemas import Token, LoginRequest
+from schemas import Token, LoginRequest, RegisterRequest
 from api.deps import CurrentUser, CurrentTienda
 
 
@@ -79,71 +79,130 @@ async def login(
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
-    email: str,
-    password: str,
-    nombre: str,
-    apellido: str,
-    tienda_nombre: str,
+    registro: RegisterRequest,
     session: Annotated[AsyncSession, Depends(get_session)]
 ) -> Token:
     """
-    Registro de nuevo usuario con tienda
-    Solo para testing - En producción usar sistema de invitaciones
+    🎯 REGISTRO PÚBLICO - Crear cuenta y tienda en un solo paso
+    
+    Cualquier persona puede registrarse y crear su negocio.
+    Se crea automáticamente:
+    - ✅ Usuario con rol 'owner' (dueño de la tienda)
+    - ✅ Tienda activa
+    - ✅ Ubicación default "Local Principal"
+    - ✅ Talles básicos (S, M, L, XL)
+    - ✅ Colores básicos (Negro, Blanco)
+    
+    El usuario queda listo para:
+    - Invitar empleados a su tienda
+    - Cargar productos
+    - Realizar ventas
     """
     from core.security import get_password_hash
-    from models import Tienda
+    from models import Tienda, Location, Size, Color
+    from uuid import uuid4
     
-    # Verificar si ya existe
-    existing = await session.exec(select(User).where(User.email == email))
-    if existing.first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email ya registrado"
+    try:
+        # 1. Verificar que el email no exista
+        result = await session.execute(select(User).where(User.email == registro.email))
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El email ya está registrado"
+            )
+        
+        # 2. Crear la Tienda
+        tienda = Tienda(
+            id=uuid4(),
+            nombre=registro.tienda_nombre,
+            rubro=registro.tienda_rubro.lower(),
+            is_active=True
         )
-    
-    # Crear tienda
-    tienda = Tienda(
-        nombre=tienda_nombre,
-        rubro="retail",
-        is_active=True
-    )
-    session.add(tienda)
-    await session.flush()
-    
-    # Crear usuario
-    user = User(
-        email=email,
-        hashed_password=get_password_hash(password),
-        nombre=nombre,
-        apellido=apellido,
-        rol="owner",
-        tienda_id=tienda.id,
-        is_active=True
-    )
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    await session.refresh(user, ["tienda"])
-    
-    # Crear token
-    access_token = create_access_token(data={"sub": str(user.id)})
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user={
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "rol": user.rol,
-            "tienda_id": str(user.tienda_id),
-            "tienda": {
-                "id": str(user.tienda.id),
-                "nombre": user.tienda.nombre,
-                "rubro": user.tienda.rubro,
-            } if user.tienda else None
-        }
-    )
+        session.add(tienda)
+        await session.flush()  # Obtener ID para relaciones
+        
+        # 3. Crear Ubicación Default (OBLIGATORIO para inventario)
+        location = Location(
+            location_id=uuid4(),
+            tienda_id=tienda.id,
+            name="Local Principal",
+            type="STORE",
+            address=registro.tienda_nombre,  # Usar nombre de tienda por defecto
+            is_default=True
+        )
+        session.add(location)
+        
+        # 4. Crear Talles Básicos
+        talles = ["XS", "S", "M", "L", "XL", "XXL"]
+        for i, talle in enumerate(talles):
+            session.add(Size(
+                tienda_id=tienda.id,
+                name=talle,
+                sort_order=i + 1
+            ))
+        
+        # 5. Crear Colores Básicos
+        colores = [
+            ("Negro", "#000000"),
+            ("Blanco", "#FFFFFF"),
+            ("Gris", "#808080"),
+            ("Azul", "#0000FF"),
+            ("Rojo", "#FF0000")
+        ]
+        for nombre, hex_code in colores:
+            session.add(Color(
+                tienda_id=tienda.id,
+                name=nombre,
+                hex_code=hex_code
+            ))
+        
+        # 6. Crear Usuario Dueño
+        user = User(
+            id=uuid4(),
+            email=registro.email,
+            hashed_password=get_password_hash(registro.password),
+            full_name=registro.full_name,
+            rol="owner",  # Dueño de la tienda
+            tienda_id=tienda.id,
+            is_active=True
+        )
+        session.add(user)
+        
+        # 7. Commit transaccional
+        await session.commit()
+        await session.refresh(user)
+        await session.refresh(user, ["tienda"])
+        
+        # 8. Crear token de acceso
+        access_token = create_access_token(data={"sub": str(user.id)})
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            user={
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "rol": user.rol,
+                "tienda_id": str(user.tienda_id),
+                "tienda": {
+                    "id": str(user.tienda.id),
+                    "nombre": user.tienda.nombre,
+                    "rubro": user.tienda.rubro,
+                } if user.tienda else None
+            }
+        )
+        
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error en el registro: {str(e)}"
+        )
 
 
 @router.post("/login/form", response_model=Token)
