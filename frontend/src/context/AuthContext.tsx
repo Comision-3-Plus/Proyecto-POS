@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         rol: response.user.rol as 'owner' | 'cajero' | 'admin' | 'vendedor' | 'encargado' | 'supervisor' | 'gerente_regional',
         is_active: true,
         created_at: new Date().toISOString(),
+        tienda: response.user.tienda,
       });
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Error al iniciar sesión';

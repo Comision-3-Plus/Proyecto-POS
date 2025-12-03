@@ -24,6 +24,8 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { useDashboardQuery } from '@/hooks/useDashboardQuery';
 import { Alert } from '@/components/ui/Alert';
 import Spinner from '@/components/ui/Spinner';
+import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
+import AFIPCertificateAlerts from '@/components/afip/CertificateAlerts';
 
 interface StatCard {
   label: string;
@@ -108,26 +110,26 @@ export default function Dashboard() {
   const stats: StatCard[] = [
     {
       label: 'Ventas del Día',
-      value: `$${dashboardData.ventas.hoy.toLocaleString()}`,
-      change: `${dashboardData.ventas.cambio_diario_porcentaje > 0 ? '+' : ''}${dashboardData.ventas.cambio_diario_porcentaje.toFixed(1)}%`,
+      value: formatCurrency(dashboardData.ventas.hoy, false),
+      change: formatPercent(dashboardData.ventas.cambio_diario_porcentaje / 100, 1),
       trend: dashboardData.ventas.cambio_diario_porcentaje >= 0 ? 'up' : 'down',
       icon: DollarSign,
-      description: `vs ayer $${dashboardData.ventas.ayer.toLocaleString()}`,
+      description: `vs ayer ${formatCurrency(dashboardData.ventas.ayer, false)}`,
       color: 'success',
     },
     {
       label: 'Transacciones',
-      value: dashboardData.ventas.tickets_emitidos.toString(),
+      value: formatNumber(dashboardData.ventas.tickets_emitidos),
       change: `${dashboardData.ventas.cambio_diario_porcentaje > 0 ? '+' : ''}${Math.abs(dashboardData.ventas.cambio_diario_porcentaje).toFixed(1)}%`,
       trend: dashboardData.ventas.cambio_diario_porcentaje >= 0 ? 'up' : 'down',
       icon: ShoppingBag,
-      description: `${dashboardData.ventas.tickets_emitidos > 0 ? (dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos).toFixed(0) : '0'} promedio/ticket`,
+      description: `${formatCurrency(dashboardData.ventas.tickets_emitidos > 0 ? dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos : 0, false)} promedio/ticket`,
       color: 'primary',
     },
     {
       label: 'Ticket Promedio',
-      value: `$${dashboardData.ventas.tickets_emitidos > 0 ? (dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}`,
-      change: `${dashboardData.ventas.cambio_semanal_porcentaje > 0 ? '+' : ''}${dashboardData.ventas.cambio_semanal_porcentaje.toFixed(1)}%`,
+      value: formatCurrency(dashboardData.ventas.tickets_emitidos > 0 ? dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos : 0, false),
+      change: formatPercent(dashboardData.ventas.cambio_semanal_porcentaje / 100, 1),
       trend: dashboardData.ventas.cambio_semanal_porcentaje >= 0 ? 'up' : 'down',
       icon: TrendingUp,
       description: 'Esta semana',
@@ -135,11 +137,11 @@ export default function Dashboard() {
     },
     {
       label: 'Productos Activos',
-      value: dashboardData.inventario.productos_activos.toString(),
+      value: formatNumber(dashboardData.inventario.productos_activos),
       change: `${dashboardData.inventario.productos_bajo_stock} bajo stock`,
       trend: 'up',
       icon: Package,
-      description: `Total: ${dashboardData.inventario.total_productos}`,
+      description: `Total: ${formatNumber(dashboardData.inventario.total_productos)}`,
       color: 'warning',
     },
   ];
@@ -152,6 +154,9 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
+      {/* AFIP Certificate Alerts */}
+      <AFIPCertificateAlerts />
+      
       {/* Header */}
       <div className="border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl sticky top-0 z-10 shadow-sm shadow-gray-200/20">
         <div className="px-5 py-4">

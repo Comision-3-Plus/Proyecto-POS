@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from core.db import get_session
 import logging
 from core.cache import cached
-from models import Producto, Venta, DetalleVenta
+from models import Product, ProductVariant, InventoryLedger, Venta, DetalleVenta, Location
 from api.deps import CurrentTienda
 
 logger = logging.getLogger(__name__)
@@ -166,71 +166,76 @@ async def obtener_dashboard_resumen(
     cambio_semanal = ((ventas_hoy - (semana_pasada / 7)) / (semana_pasada / 7) * 100) if semana_pasada > 0 else 0
     
     # === INVENTARIO ===
-    # Contar productos totales
-    stmt_total = select(func.count(Producto.id)).where(Producto.tienda_id == current_tienda.id)
-    total_productos = (await session.execute(stmt_total)).scalar()
+    # Contar productos totales (productos padre)
+    stmt_total = select(func.count(Product.product_id)).where(Product.tienda_id == current_tienda.id)
+    total_productos = (await session.execute(stmt_total)).scalar() or 0
     
     # Contar productos activos
-    stmt_activos = select(func.count(Producto.id)).where(
-        and_(Producto.tienda_id == current_tienda.id, Producto.is_active == True)
+    stmt_activos = select(func.count(Product.product_id)).where(
+        and_(Product.tienda_id == current_tienda.id, Product.is_active == True)
     )
-    productos_activos = (await session.execute(stmt_activos)).scalar()
+    productos_activos = (await session.execute(stmt_activos)).scalar() or 0
     
-    # Contar productos bajo stock
-    stmt_bajo_stock = select(func.count(Producto.id)).where(
-        and_(Producto.tienda_id == current_tienda.id, Producto.stock_actual <= 10)
+    # Contar variantes bajo stock (con stock < 10)
+    # Primero obtenemos el stock actual por variante desde InventoryLedger
+    stmt_bajo_stock = select(
+        InventoryLedger.variant_id,
+        func.sum(InventoryLedger.delta).label('stock_actual')
+    ).join(
+        ProductVariant, InventoryLedger.variant_id == ProductVariant.variant_id
+    ).where(
+        ProductVariant.tienda_id == current_tienda.id
+    ).group_by(
+        InventoryLedger.variant_id
+    ).having(
+        func.sum(InventoryLedger.delta) <= 10
     )
-    productos_bajo_stock = (await session.execute(stmt_bajo_stock)).scalar()
+    result_bajo_stock = await session.execute(stmt_bajo_stock)
+    productos_bajo_stock = len(result_bajo_stock.all())
     
-    # Valor total del inventario
-    stmt_valor = select(func.coalesce(func.sum(Producto.stock_actual * Producto.precio_venta), 0)).where(
-        Producto.tienda_id == current_tienda.id
+    # Valor total del inventario (suma de stock * precio de todas las variantes)
+    stmt_valor = select(
+        ProductVariant.variant_id,
+        ProductVariant.price,
+        func.sum(InventoryLedger.delta).label('stock_actual')
+    ).join(
+        InventoryLedger, ProductVariant.variant_id == InventoryLedger.variant_id
+    ).where(
+        ProductVariant.tienda_id == current_tienda.id
+    ).group_by(
+        ProductVariant.variant_id, ProductVariant.price
     )
-    valor_inventario = (await session.execute(stmt_valor)).scalar()
+    result_valor = await session.execute(stmt_valor)
+    valor_inventario = sum(
+        (row.stock_actual or 0) * (row.price or 0) 
+        for row in result_valor.all()
+    )
+
     
     # === PRODUCTOS DESTACADOS (más vendidos hoy) ===
-    stmt_destacados = select(
-        Producto.id,
-        Producto.nombre,
-        Producto.sku,
-        Producto.stock_actual,
-        func.count(DetalleVenta.id).label('ventas_count')
-    ).join(
-        DetalleVenta, Producto.id == DetalleVenta.producto_id
-    ).join(
-        Venta, DetalleVenta.venta_id == Venta.id
-    ).where(
-        and_(
-            Venta.tienda_id == current_tienda.id,
-            Venta.fecha >= hoy_inicio,
-            Venta.status_pago == 'pagado'
-        )
-    ).group_by(
-        Producto.id, Producto.nombre, Producto.sku, Producto.stock_actual
-    ).order_by(desc('ventas_count')).limit(5)
-    
-    destacados_result = await session.execute(stmt_destacados)
-    destacados = [
-        ProductoDestacado(
-            id=str(row[0]),
-            nombre=row[1],
-            sku=row[2],
-            stock=row[3],
-            ventas_hoy=row[4]
-        )
-        for row in destacados_result.all()
-    ]
+    # Por ahora retornamos una lista vacía - necesitaría actualizar DetalleVenta para usar variant_id
+    destacados = []
     
     # === ALERTAS CRÍTICAS ===
-    # Productos sin stock + bajo stock crítico (< 5)
-    stmt_alertas = select(func.count(Producto.id)).where(
+    # Variantes con stock crítico (< 5)
+    stmt_alertas = select(
+        InventoryLedger.variant_id,
+        func.sum(InventoryLedger.delta).label('stock_actual')
+    ).join(
+        ProductVariant, InventoryLedger.variant_id == ProductVariant.variant_id
+    ).where(
+        ProductVariant.tienda_id == current_tienda.id
+    ).group_by(
+        InventoryLedger.variant_id
+    ).having(
         and_(
-            Producto.tienda_id == current_tienda.id,
-            Producto.stock_actual < 5,
-            Producto.is_active == True
+            func.sum(InventoryLedger.delta) < 5,
+            func.sum(InventoryLedger.delta) >= 0
         )
     )
-    alertas = (await session.execute(stmt_alertas)).scalar()
+    result_alertas = await session.execute(stmt_alertas)
+    alertas = len(result_alertas.all())
+
     
     return DashboardResumen(
         ventas=MetricaVentas(

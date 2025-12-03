@@ -11,6 +11,7 @@ import { Package, AlertTriangle, TrendingUp, MapPin, Plus } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { useStockResumen, useLowStockProducts } from '@/hooks/useStockQuery';
+import { formatNumber } from '@/lib/format';
 // TODO: Import when implementing modals
 // import { useLocations, useCreateAdjustment, useTransferStock } from '@/hooks/useStockQuery';
 
@@ -37,7 +38,7 @@ export default function Stock() {
         <div className="px-6 py-5">
           <h2 className="text-lg font-semibold text-gray-900">Gestión de Stock</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {totalProducts} productos · {totalStock.toFixed(0)} unidades totales
+            {formatNumber(totalProducts)} productos · {formatNumber(totalStock)} unidades totales
           </p>
         </div>
       </div>
@@ -51,7 +52,7 @@ export default function Stock() {
                 <Package className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatNumber(totalProducts)}</p>
                 <p className="text-sm text-gray-500">Productos</p>
               </div>
             </div>
@@ -63,7 +64,7 @@ export default function Stock() {
                 <TrendingUp className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{totalStock.toFixed(0)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatNumber(totalStock)}</p>
                 <p className="text-sm text-gray-500">Unidades Totales</p>
               </div>
             </div>
@@ -75,7 +76,7 @@ export default function Stock() {
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{lowStockData.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatNumber(lowStockData.length)}</p>
                 <p className="text-sm text-gray-500">Bajo Stock</p>
               </div>
             </div>

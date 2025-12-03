@@ -4,6 +4,14 @@
  */
 
 // ==================== AUTH ====================
+export interface Tienda {
+  id: string;
+  nombre: string;
+  rubro: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -11,14 +19,7 @@ export interface User {
   rol: 'owner' | 'cajero' | 'admin' | 'vendedor' | 'encargado' | 'supervisor' | 'gerente_regional';
   is_active: boolean;
   tienda_id: string;
-  created_at: string;
-}
-
-export interface Tienda {
-  id: string;
-  nombre: string;
-  rubro: string;
-  is_active: boolean;
+  tienda?: Tienda;
   created_at: string;
 }
 

@@ -10,8 +10,6 @@ import Spinner from '@/components/ui/Spinner';
 import {
   useTopProductos,
   useTendenciaVentas,
-  useVentasPorCategoria,
-  useVentasPorMetodoPago,
   useExportarReporte,
 } from '@/hooks/useReportesQuery';
 
@@ -20,10 +18,13 @@ type PeriodoType = 'hoy' | 'semana' | 'mes';
 export default function Reportes() {
   const [periodo, setPeriodo] = useState<PeriodoType>('mes');
   
+  // Temporalmente deshabilitado hasta que se actualice la DB
   const { data: topProductos = [], isLoading: loadingProductos } = useTopProductos({ limit: 10 });
   const { data: tendencia = [], isLoading: loadingTendencia } = useTendenciaVentas(30);
-  const { data: porCategoria = [] } = useVentasPorCategoria();
-  const { data: porMetodoPago = [] } = useVentasPorMetodoPago();
+  
+  // Datos mock mientras se actualiza
+  const porCategoria: any[] = [];
+  const porMetodoPago: any[] = [];
   const exportMutation = useExportarReporte();
 
   const handleExport = () => {
@@ -31,8 +32,8 @@ export default function Reportes() {
   };
 
   // Calcular totales de tendencia
-  const totalVentas = tendencia.reduce((sum, item) => sum + item.total_ventas, 0);
-  const totalTransacciones = tendencia.reduce((sum, item) => sum + item.cantidad_ventas, 0);
+  const totalVentas = tendencia.reduce((sum, item) => sum + (item.total_ventas || 0), 0);
+  const totalTransacciones = tendencia.reduce((sum, item) => sum + (item.cantidad_ventas || 0), 0);
   const ticketPromedio = totalTransacciones > 0 ? totalVentas / totalTransacciones : 0;
 
   return (

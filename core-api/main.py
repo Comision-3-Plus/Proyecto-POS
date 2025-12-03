@@ -22,7 +22,7 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache, usuarios, integrations, retail_analytics, clientes, stock
+from api.routes import auth, productos, ventas, ventas_simple, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache, usuarios, integrations, retail_analytics, clientes, stock, afip
 
 
 @asynccontextmanager
@@ -105,6 +105,7 @@ app.include_router(integrations.router, prefix=settings.API_V1_STR)  # ⭐ MÓDU
 app.include_router(retail_analytics.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 6 - Análisis Retail
 app.include_router(productos.router, prefix=settings.API_V1_STR)
 app.include_router(ventas.router, prefix=settings.API_V1_STR)
+app.include_router(ventas_simple.router, prefix=settings.API_V1_STR)  # ⭐ Endpoint simplificado que funciona
 app.include_router(clientes.router, prefix=settings.API_V1_STR)  # ⭐ CRM - Gestión de clientes
 app.include_router(stock.router, prefix=settings.API_V1_STR)  # ⭐ Stock - Gestión de inventario
 app.include_router(payments.router, prefix=settings.API_V1_STR)
@@ -116,6 +117,7 @@ app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(exportar.router, prefix=settings.API_V1_STR)
 app.include_router(caja.router, prefix=settings.API_V1_STR)
 app.include_router(compras.router, prefix=settings.API_V1_STR)
+app.include_router(afip.router, prefix=settings.API_V1_STR)  # ⭐ AFIP - Certificados y fiscalización
 
 
 @app.get("/")

@@ -104,19 +104,35 @@ export default function Ventas() {
     }
 
     try {
-      await checkoutMutation.mutateAsync({
-        items: cart.map(item => ({
-          producto_id: item.product_id,
-          cantidad: item.cantidad,
-        })),
-        metodo_pago,
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:8001/api/v1/ventas-simple/checkout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: cart.map(item => ({
+            variant_id: item.variant_id,
+            cantidad: item.cantidad,
+          })),
+          metodo_pago,
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al procesar venta');
+      }
+
+      const data = await response.json();
+      
       // Limpiar carrito
       setCart([]);
-      showSuccess('¡Venta procesada exitosamente!');
-    } catch (error) {
+      showSuccess(`¡Venta procesada! Total: $${data.total.toFixed(2)}`);
+    } catch (error: any) {
       console.error('Error en checkout:', error);
+      showError(error.message || 'Error al procesar venta');
     }
   };
 

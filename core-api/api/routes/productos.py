@@ -309,6 +309,9 @@ async def crear_producto(
             # Crear transacción de stock inicial si hay stock
             if variant_data.initial_stock > 0:
                 ubicacion_destino = variant_data.location_id or default_location.location_id
+                # Convertir a UUID si es string
+                if isinstance(ubicacion_destino, str):
+                    ubicacion_destino = UUID(ubicacion_destino)
                 
                 transaccion = InventoryLedger(
                     tienda_id=current_tienda.id,
@@ -340,15 +343,41 @@ async def crear_producto(
         )
         
         # Construir respuesta
-        producto_read = ProductRead.model_validate(nuevo_producto)
-        producto_read.variants_count = len(variantes_creadas)
+        producto_dict = {
+            "product_id": str(nuevo_producto.product_id),
+            "tienda_id": str(nuevo_producto.tienda_id),
+            "name": nuevo_producto.name,
+            "base_sku": nuevo_producto.base_sku,
+            "description": nuevo_producto.description,
+            "category": nuevo_producto.category,
+            "is_active": nuevo_producto.is_active,
+            "created_at": nuevo_producto.created_at,
+            "updated_at": nuevo_producto.updated_at,
+            "variants_count": len(variantes_creadas),
+            "variants": []
+        }
+        producto_read = ProductRead(**producto_dict)
         
         variantes_read = []
         for variante in variantes_creadas:
             # Cargar relaciones de size y color
             await session.refresh(variante, attribute_names=['size', 'color'])
-            variant_dict = ProductVariantRead.model_validate(variante).model_dump()
-            variant_dict['stock_total'] = await calculate_stock_by_variant(session, variante.variant_id)
+            
+            variant_dict = {
+                "variant_id": str(variante.variant_id),
+                "product_id": str(variante.product_id),
+                "tienda_id": str(variante.tienda_id),
+                "sku": variante.sku,
+                "size_id": variante.size_id,
+                "size_name": variante.size.name if variante.size else None,
+                "color_id": variante.color_id,
+                "color_name": variante.color.name if variante.color else None,
+                "price": float(variante.price),
+                "barcode": variante.barcode,
+                "is_active": variante.is_active,
+                "created_at": variante.created_at,
+                "stock_total": float(await calculate_stock_by_variant(session, variante.variant_id))
+            }
             variantes_read.append(ProductVariantRead(**variant_dict))
         
         return ProductCreateResponse(

@@ -16,6 +16,9 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { useToast } from '../hooks/useToast';
+import { ToastContainer } from '../components/common/ToastNotification';
+import ProgressBar from '../components/common/ProgressBar';
 
 type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -74,6 +77,31 @@ const platformConfig = {
 
 export default function OMS() {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | 'all'>('all');
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const { toasts, removeToast, success, info } = useToast();
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncProgress(0);
+    info('Iniciando sincronización...', 'Conectando con plataformas');
+
+    // Simular sincronización con progress
+    const interval = setInterval(() => {
+      setSyncProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setSyncing(false);
+          success(
+            'Sincronización completada',
+            '47 órdenes actualizadas desde Shopify, Mercado Libre y TiendaNube'
+          );
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 300);
+  };
 
   const stats = [
     { label: 'Órdenes Hoy', value: '47', change: '+12%', trend: 'up' as const },
@@ -84,6 +112,21 @@ export default function OMS() {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      
+      {/* Sync Progress Bar */}
+      {syncing && (
+        <div className="fixed top-16 left-0 right-0 z-50 px-6 py-3 bg-white border-b border-gray-200 shadow-sm">
+          <ProgressBar
+            progress={syncProgress}
+            color="indigo"
+            size="md"
+            showPercentage
+            label="Sincronizando órdenes..."
+          />
+        </div>
+      )}
+      
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl shadow-sm shadow-gray-200/20">
         <div className="px-6 py-5">
@@ -97,9 +140,14 @@ export default function OMS() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="secondary" size="sm">
-                <RefreshCw className="w-4 h-4" />
-                Sincronizar
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
               </Button>
               <Button variant="secondary" size="sm">
                 <Download className="w-4 h-4" />

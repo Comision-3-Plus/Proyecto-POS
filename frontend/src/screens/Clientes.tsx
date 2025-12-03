@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Users, UserPlus, Search, Mail, Phone, MapPin, Edit, X } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import EmptyState from '@/components/ui/EmptyState';
 import { useClientes, useCreateCliente, useUpdateCliente, useDeactivateCliente, useTopClientes } from '@/hooks/useClientesQuery';
 import type { Cliente, ClienteCreate } from '@/services/clientes.service';
 import ClienteModal from '@/components/clientes/ClienteModal';
@@ -113,12 +114,19 @@ export default function Clientes() {
               <Spinner />
             </div>
           ) : clientes.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-sm text-gray-500">
-                {searchQuery ? 'No se encontraron clientes' : 'No hay clientes registrados'}
-              </p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title={searchQuery ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+              description={
+                searchQuery 
+                  ? 'Intenta ajustar los filtros de búsqueda para encontrar clientes.'
+                  : 'Comienza agregando tu primer cliente para llevar un registro de tus ventas.'
+              }
+              action={{
+                label: 'Crear Primer Cliente',
+                onClick: () => setShowCreateModal(true),
+              }}
+            />
           ) : (
             <div className="space-y-3">
               {clientes.map((cliente) => (

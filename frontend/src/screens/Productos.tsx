@@ -12,6 +12,7 @@ import Button from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import CreateProductModal from '@/components/productos/CreateProductModal';
 import type { Product } from '@/types/api';
+import { formatCurrency, formatNumber } from '@/lib/format';
 
 export default function Productos() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,7 +155,7 @@ export default function Productos() {
       align: 'right',
       render: (p) => (
         <span className="font-bold text-gray-900 text-base">
-          ${p.variants?.[0]?.price?.toFixed(2) || '0.00'}
+          {formatCurrency(p.variants?.[0]?.price || 0)}
         </span>
       ),
     },
@@ -174,7 +175,7 @@ export default function Productos() {
                 : 'bg-gradient-to-br from-success-50 to-emerald-50 text-success-700 border border-success-200/50'
             }`}
           >
-            {stock}
+            {formatNumber(stock)}
           </span>
         );
       },

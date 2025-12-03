@@ -14,6 +14,7 @@ import Dashboard from './screens/Dashboard';
 import Productos from './screens/Productos';
 import Ventas from './screens/Ventas';
 import Stock from './screens/Stock';
+import Caja from './screens/Caja';
 import OMS from './screens/OMS';
 import Reportes from './screens/Reportes';
 import Clientes from './screens/Clientes';
@@ -115,6 +116,16 @@ export default function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <Stock />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/caja"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Caja />
                     </MainLayout>
                   </ProtectedRoute>
                 }

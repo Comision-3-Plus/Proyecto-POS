@@ -12,11 +12,16 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    host: '0.0.0.0', // Necesario para Docker
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:8001',
         changeOrigin: true,
       },
     },
+  },
+  preview: {
+    port: 3000,
+    host: '0.0.0.0',
   },
 })

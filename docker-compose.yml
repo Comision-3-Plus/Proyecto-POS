@@ -219,23 +219,22 @@ services:
       - super_network
 
   # ----------------------------------------------------------------
-  # 6. FRONTEND (La Cara - Next.js de Lautaro) - COMENTADO POR AHORA
+  # 6. FRONTEND (La Cara - React + Vite)
   # ----------------------------------------------------------------
-  # frontend:
-  #   build:
-  #     context: ./web-portal
-  #     dockerfile: Dockerfile
-  #   container_name: super_pos_frontend
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - core_api
-  #   environment:
-  #     # El frontend habla con TU API (Python)
-  #     NEXT_PUBLIC_API_URL: http://localhost:8001
-  #   ports:
-  #     - "3000:3000"
-  #   networks:
-  #     - super_network
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: super_pos_frontend
+    restart: unless-stopped
+    depends_on:
+      - core_api
+    ports:
+      - "3000:3000"
+    networks:
+      - super_network
 
   # ----------------------------------------------------------------
   # 7. ADMINER (Utilidad DB)
