@@ -9,7 +9,7 @@ import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { APIError } from '@/types/api';
 
 // En desarrollo usar el proxy de Vite, en producción usar la variable de entorno
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:8001/api/v1');
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 // Instancia de Axios
 export const apiClient = axios.create({

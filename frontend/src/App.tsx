@@ -9,6 +9,7 @@ import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/layout/Sidebar';
 import Login from './screens/Login';
+import Register from './screens/Register';
 import Dashboard from './screens/Dashboard';
 import Productos from './screens/Productos';
 import Ventas from './screens/Ventas';
@@ -75,6 +76,7 @@ export default function App() {
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
               {/* Protected Routes */}
               <Route

@@ -132,44 +132,23 @@ async def register(
             is_default=True
         )
         session.add(location)
+        await session.flush()
         
-        # 4. Crear Talles Básicos
-        talles = ["XS", "S", "M", "L", "XL", "XXL"]
-        for i, talle in enumerate(talles):
-            session.add(Size(
-                tienda_id=tienda.id,
-                name=talle,
-                sort_order=i + 1
-            ))
-        
-        # 5. Crear Colores Básicos
-        colores = [
-            ("Negro", "#000000"),
-            ("Blanco", "#FFFFFF"),
-            ("Gris", "#808080"),
-            ("Azul", "#0000FF"),
-            ("Rojo", "#FF0000")
-        ]
-        for nombre, hex_code in colores:
-            session.add(Color(
-                tienda_id=tienda.id,
-                name=nombre,
-                hex_code=hex_code
-            ))
-        
-        # 6. Crear Usuario Dueño
+        # 4. Crear Usuario Dueño
         user = User(
             id=uuid4(),
             email=registro.email,
             hashed_password=get_password_hash(registro.password),
             full_name=registro.full_name,
+            documento_tipo="DNI",
+            documento_numero=registro.dni,  # Usar dni del schema
             rol="owner",  # Dueño de la tienda
             tienda_id=tienda.id,
             is_active=True
         )
         session.add(user)
         
-        # 7. Commit transaccional
+        # 5. Commit transaccional
         await session.commit()
         await session.refresh(user)
         await session.refresh(user, ["tienda"])

@@ -76,12 +76,14 @@ export interface ProductVariant {
 
 export interface Product {
   product_id: string;
+  tienda_id: string;
   name: string;
   base_sku: string;
   description?: string;
   category?: string;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
   variants_count?: number;
   variants?: ProductVariant[];
 }

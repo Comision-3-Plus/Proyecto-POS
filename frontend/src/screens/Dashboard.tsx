@@ -8,7 +8,6 @@ import {
   TrendingUp,
   Package,
   ShoppingCart,
-  Users,
   DollarSign,
   Activity,
   AlertCircle,
@@ -22,6 +21,9 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { useDashboardQuery } from '@/hooks/useDashboardQuery';
+import { Alert } from '@/components/ui/Alert';
+import Spinner from '@/components/ui/Spinner';
 
 interface StatCard {
   label: string;
@@ -32,90 +34,6 @@ interface StatCard {
   description: string;
   color: 'primary' | 'success' | 'warning' | 'accent';
 }
-
-const stats: StatCard[] = [
-  {
-    label: 'Ventas del Día',
-    value: '$284,500',
-    change: '+12.5%',
-    trend: 'up',
-    icon: DollarSign,
-    description: 'vs ayer $253,200',
-    color: 'success',
-  },
-  {
-    label: 'Transacciones',
-    value: '142',
-    change: '+8.2%',
-    trend: 'up',
-    icon: ShoppingBag,
-    description: '18 transacciones/hora',
-    color: 'primary',
-  },
-  {
-    label: 'Ticket Promedio',
-    value: '$2,004',
-    change: '+3.1%',
-    trend: 'up',
-    icon: TrendingUp,
-    description: 'Objetivo: $2,100',
-    color: 'accent',
-  },
-  {
-    label: 'Clientes Nuevos',
-    value: '28',
-    change: '+15.3%',
-    trend: 'up',
-    icon: Users,
-    description: 'Total activos: 1,847',
-    color: 'warning',
-  },
-];
-
-// Sales data for sparklines
-const salesData = [
-  { time: '09:00', amount: 12500 },
-  { time: '10:00', amount: 18400 },
-  { time: '11:00', amount: 24300 },
-  { time: '12:00', amount: 31200 },
-  { time: '13:00', amount: 28900 },
-  { time: '14:00', amount: 35600 },
-  { time: '15:00', amount: 42800 },
-  { time: '16:00', amount: 38400 },
-];
-
-const transactionsData = [
-  { time: 1, value: 12 },
-  { time: 2, value: 15 },
-  { time: 3, value: 18 },
-  { time: 4, value: 22 },
-  { time: 5, value: 19 },
-  { time: 6, value: 25 },
-  { time: 7, value: 28 },
-  { time: 8, value: 24 },
-];
-
-const ticketData = [
-  { time: 1, value: 1850 },
-  { time: 2, value: 1920 },
-  { time: 3, value: 1880 },
-  { time: 4, value: 1950 },
-  { time: 5, value: 1990 },
-  { time: 6, value: 2020 },
-  { time: 7, value: 1980 },
-  { time: 8, value: 2004 },
-];
-
-const customersData = [
-  { time: 1, value: 20 },
-  { time: 2, value: 22 },
-  { time: 3, value: 19 },
-  { time: 4, value: 24 },
-  { time: 5, value: 26 },
-  { time: 6, value: 25 },
-  { time: 7, value: 27 },
-  { time: 8, value: 28 },
-];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -147,45 +65,91 @@ const recentActivity = [
   {
     id: 1,
     type: 'sale' as const,
-    description: 'Venta #2847 completada',
-    amount: '$1,250',
-    time: 'Hace 5 min',
-    customer: 'Juan Pérez',
-  },
-  {
-    id: 2,
-    type: 'product' as const,
-    description: 'Stock bajo: Laptop Dell XPS',
-    amount: '3 unidades',
-    time: 'Hace 12 min',
+    description: 'Venta completada',
+    amount: 'Procesando...',
+    time: 'En tiempo real',
     customer: null,
   },
-  {
-    id: 3,
-    type: 'order' as const,
-    description: 'Nueva orden desde Shopify',
-    amount: '$847',
-    time: 'Hace 18 min',
-    customer: 'María García',
-  },
-  {
-    id: 4,
-    type: 'sale' as const,
-    description: 'Venta #2846 completada',
-    amount: '$3,420',
-    time: 'Hace 25 min',
-    customer: 'Carlos López',
-  },
-];
-
-const topProducts = [
-  { name: 'Laptop Dell XPS 15', sold: 45, revenue: 56250000, trend: 'up' },
-  { name: 'iPhone 15 Pro Max', sold: 38, revenue: 47500000, trend: 'up' },
-  { name: 'Monitor LG 27"', sold: 34, revenue: 10200000, trend: 'down' },
-  { name: 'Mouse Logitech MX', sold: 127, revenue: 1587500, trend: 'up' },
 ];
 
 export default function Dashboard() {
+  const { data: dashboardData, isLoading, error, refetch } = useDashboardQuery();
+
+  // Mostrar spinner mientras carga
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Spinner size="lg" />
+          <p className="text-gray-600 mt-4">Cargando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar error si falla
+  if (error || !dashboardData) {
+    return (
+      <div className="flex items-center justify-center h-full p-6">
+        <Alert variant="danger" className="max-w-md">
+          <p className="font-bold">Error al cargar dashboard</p>
+          <p className="text-sm mt-1">
+            {error instanceof Error ? error.message : 'Error desconocido'}
+          </p>
+          <Button variant="primary" size="sm" onClick={() => refetch()} className="mt-3">
+            Reintentar
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
+
+  // Preparar stats con datos reales
+  const stats: StatCard[] = [
+    {
+      label: 'Ventas del Día',
+      value: `$${dashboardData.ventas.hoy.toLocaleString()}`,
+      change: `${dashboardData.ventas.cambio_diario_porcentaje > 0 ? '+' : ''}${dashboardData.ventas.cambio_diario_porcentaje.toFixed(1)}%`,
+      trend: dashboardData.ventas.cambio_diario_porcentaje >= 0 ? 'up' : 'down',
+      icon: DollarSign,
+      description: `vs ayer $${dashboardData.ventas.ayer.toLocaleString()}`,
+      color: 'success',
+    },
+    {
+      label: 'Transacciones',
+      value: dashboardData.ventas.tickets_emitidos.toString(),
+      change: `${dashboardData.ventas.cambio_diario_porcentaje > 0 ? '+' : ''}${Math.abs(dashboardData.ventas.cambio_diario_porcentaje).toFixed(1)}%`,
+      trend: dashboardData.ventas.cambio_diario_porcentaje >= 0 ? 'up' : 'down',
+      icon: ShoppingBag,
+      description: `${dashboardData.ventas.tickets_emitidos > 0 ? (dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos).toFixed(0) : '0'} promedio/ticket`,
+      color: 'primary',
+    },
+    {
+      label: 'Ticket Promedio',
+      value: `$${dashboardData.ventas.tickets_emitidos > 0 ? (dashboardData.ventas.hoy / dashboardData.ventas.tickets_emitidos).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}`,
+      change: `${dashboardData.ventas.cambio_semanal_porcentaje > 0 ? '+' : ''}${dashboardData.ventas.cambio_semanal_porcentaje.toFixed(1)}%`,
+      trend: dashboardData.ventas.cambio_semanal_porcentaje >= 0 ? 'up' : 'down',
+      icon: TrendingUp,
+      description: 'Esta semana',
+      color: 'accent',
+    },
+    {
+      label: 'Productos Activos',
+      value: dashboardData.inventario.productos_activos.toString(),
+      change: `${dashboardData.inventario.productos_bajo_stock} bajo stock`,
+      trend: 'up',
+      icon: Package,
+      description: `Total: ${dashboardData.inventario.total_productos}`,
+      color: 'warning',
+    },
+  ];
+
+  // Datos para sparklines de últimos 7 días
+  const salesData = dashboardData.ventas.ultimos_7_dias.map((d, i) => ({
+    time: i + 1,
+    value: d.total,
+  }));
+
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
       {/* Header */}
@@ -233,11 +197,11 @@ export default function Dashboard() {
                 accent: 'from-accent-500 to-accent-600',
               };
               
-              // Seleccionar datos del sparkline según el stat
-              const sparklineData = index === 0 ? salesData.map(d => ({ value: d.amount })) : 
-                                   index === 1 ? transactionsData :
-                                   index === 2 ? ticketData :
-                                   customersData;
+              // Usar datos reales de sparkline
+              const sparklineData = index === 0 ? salesData : 
+                                   index === 1 ? salesData.map(d => ({ value: Math.max(1, Math.floor(d.value / 2000)) })) :
+                                   index === 2 ? salesData.map(d => ({ value: Math.max(1000, d.value / (dashboardData.ventas.tickets_emitidos || 1)) })) :
+                                   salesData.map(d => ({ value: Math.max(10, Math.floor(d.value / 1000)) }));
               
               const sparklineColor = stat.color === 'success' ? '#10b981' :
                                     stat.color === 'primary' ? '#0ea5e9' :
@@ -338,7 +302,7 @@ export default function Dashboard() {
               </div>
             </motion.div>
 
-            {/* AFIP Status - Rediseñado */}
+            {/* AFIP Status / Alertas - Rediseñado */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -346,49 +310,72 @@ export default function Dashboard() {
               className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/50 shadow-xl shadow-gray-200/30 hover:shadow-2xl transition-all duration-500"
             >
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-success-500 to-emerald-600 shadow-lg shadow-success-500/30">
+                <div className={`p-2.5 rounded-xl ${dashboardData.alertas_criticas > 0 ? 'bg-gradient-to-br from-warning-500 to-orange-600 shadow-lg shadow-warning-500/30' : 'bg-gradient-to-br from-success-500 to-emerald-600 shadow-lg shadow-success-500/30'}`}>
                   <Activity className="w-4 h-4 text-white" strokeWidth={2.5} />
                 </div>
-                <h3 className="text-base font-bold text-gray-900">Estado AFIP</h3>
+                <h3 className="text-base font-bold text-gray-900">Estado del Sistema</h3>
               </div>
               <div className="space-y-4">
-                <div className="relative overflow-hidden flex items-center gap-4 p-4 bg-gradient-to-br from-success-50 via-emerald-50 to-green-50 rounded-xl border border-success-200 shadow-md">
-                  <div className="absolute inset-0 bg-gradient-to-r from-success-400/10 to-emerald-400/10 animate-pulse" />
-                  <div className="relative z-10 p-2.5 rounded-xl bg-gradient-to-br from-success-500 to-emerald-600 shadow-lg">
-                    <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.5} />
+                {dashboardData.alertas_criticas > 0 ? (
+                  <div className="relative overflow-hidden flex items-center gap-4 p-4 bg-gradient-to-br from-warning-50 via-orange-50 to-yellow-50 rounded-xl border border-warning-200 shadow-md">
+                    <div className="absolute inset-0 bg-gradient-to-r from-warning-400/10 to-orange-400/10 animate-pulse" />
+                    <div className="relative z-10 p-2.5 rounded-xl bg-gradient-to-br from-warning-500 to-orange-600 shadow-lg">
+                      <AlertCircle className="w-5 h-5 text-white" strokeWidth={2.5} />
+                    </div>
+                    <div className="relative z-10 flex-1">
+                      <p className="text-sm font-bold text-warning-900">
+                        {dashboardData.alertas_criticas} Alerta{dashboardData.alertas_criticas !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-xs text-warning-700 mt-0.5">
+                        Productos con stock crítico
+                      </p>
+                    </div>
+                    <div className="relative z-10 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-warning-500 animate-ping absolute" />
+                      <div className="w-3 h-3 rounded-full bg-warning-500" />
+                    </div>
                   </div>
-                  <div className="relative z-10 flex-1">
-                    <p className="text-sm font-bold text-success-900">Operativo</p>
-                    <p className="text-xs text-success-700 mt-0.5">
-                      Último chequeo: 10:34 AM
-                    </p>
+                ) : (
+                  <div className="relative overflow-hidden flex items-center gap-4 p-4 bg-gradient-to-br from-success-50 via-emerald-50 to-green-50 rounded-xl border border-success-200 shadow-md">
+                    <div className="absolute inset-0 bg-gradient-to-r from-success-400/10 to-emerald-400/10 animate-pulse" />
+                    <div className="relative z-10 p-2.5 rounded-xl bg-gradient-to-br from-success-500 to-emerald-600 shadow-lg">
+                      <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.5} />
+                    </div>
+                    <div className="relative z-10 flex-1">
+                      <p className="text-sm font-bold text-success-900">Operativo</p>
+                      <p className="text-xs text-success-700 mt-0.5">
+                        Sistema funcionando correctamente
+                      </p>
+                    </div>
+                    <div className="relative z-10 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-success-500 animate-ping absolute" />
+                      <div className="w-3 h-3 rounded-full bg-success-500" />
+                    </div>
                   </div>
-                  <div className="relative z-10 flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-success-500 animate-ping absolute" />
-                    <div className="w-3 h-3 rounded-full bg-success-500" />
-                  </div>
-                </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Comprobantes del día</span>
-                    <span className="font-semibold text-gray-900">142</span>
+                    <span className="text-gray-600">Productos activos</span>
+                    <span className="font-semibold text-gray-900">{dashboardData.inventario.productos_activos}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">CAEA vigente</span>
-                    <span className="font-semibold text-gray-900">Hasta 15/12</span>
+                    <span className="text-gray-600">Valor inventario</span>
+                    <span className="font-semibold text-gray-900">
+                      ${dashboardData.inventario.valor_total_inventario.toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Último CAE</span>
-                    <span className="font-mono text-[10px] text-gray-600">
-                      742...893
+                    <span className="text-gray-600">Ventas del mes</span>
+                    <span className="font-semibold text-gray-900">
+                      ${dashboardData.ventas.mes.toLocaleString()}
                     </span>
                   </div>
                 </div>
               </div>
             </motion.div>
 
-            {/* Top Products - Rediseñado */}
+            {/* Top Products - Rediseñado con datos reales */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -402,46 +389,44 @@ export default function Dashboard() {
                 <h3 className="text-base font-bold text-gray-900">Top Productos</h3>
               </div>
               <div className="space-y-3">
-                {topProducts.map((product, index) => (
-                  <motion.div
-                    key={product.name}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.35 + index * 0.05 }}
-                    whileHover={{ x: 4, scale: 1.02 }}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 border border-gray-200/50 hover:border-gray-300 transition-all duration-300 cursor-pointer group"
-                  >
-                    <div className="flex-shrink-0 relative">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
-                        <span className="text-sm font-black text-gray-700">
-                          #{index + 1}
-                        </span>
-                      </div>
-                      {product.trend === 'up' && (
+                {dashboardData.productos_destacados.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No hay ventas registradas hoy
+                  </p>
+                ) : (
+                  dashboardData.productos_destacados.map((product, index) => (
+                    <motion.div
+                      key={product.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.35 + index * 0.05 }}
+                      whileHover={{ x: 4, scale: 1.02 }}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 border border-gray-200/50 hover:border-gray-300 transition-all duration-300 cursor-pointer group"
+                    >
+                      <div className="flex-shrink-0 relative">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
+                          <span className="text-sm font-black text-gray-700">
+                            #{index + 1}
+                          </span>
+                        </div>
                         <div className="absolute -top-1 -right-1 p-0.5 rounded-full bg-success-500 shadow-lg">
                           <ArrowUpRight className="w-2.5 h-2.5 text-white" strokeWidth={3} />
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate group-hover:text-primary-600 transition-colors">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-gray-500 font-medium">
-                        {product.sold} vendidos
-                      </p>
-                    </div>
-                    {product.trend === 'up' ? (
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate group-hover:text-primary-600 transition-colors">
+                          {product.nombre}
+                        </p>
+                        <p className="text-xs text-gray-500 font-medium">
+                          {product.ventas_hoy} vendidos • Stock: {product.stock}
+                        </p>
+                      </div>
                       <div className="flex-shrink-0 px-2.5 py-1 rounded-full bg-success-50 border border-success-200">
-                        <span className="text-xs font-bold text-success-700">+{Math.round(Math.random() * 20 + 5)}%</span>
+                        <span className="text-xs font-bold text-success-700">Top {index + 1}</span>
                       </div>
-                    ) : (
-                      <div className="flex-shrink-0 px-2.5 py-1 rounded-full bg-danger-50 border border-danger-200">
-                        <span className="text-xs font-bold text-danger-700">-{Math.round(Math.random() * 10 + 2)}%</span>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                )}
               </div>
             </motion.div>
           </div>

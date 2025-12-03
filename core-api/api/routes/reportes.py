@@ -338,3 +338,307 @@ async def obtener_tendencia_ventas_diaria(
         )
         for row in rows
     ]
+
+
+# =====================================================
+# NUEVOS ENDPOINTS PARA REPORTES EXTENDIDOS
+# =====================================================
+
+class VentasPorCategoria(BaseModel):
+    """Ventas agrupadas por categoría"""
+    category: str
+    total_ventas: float
+    cantidad_productos: int
+    porcentaje: float
+
+
+class VentasPorMetodoPago(BaseModel):
+    """Ventas agrupadas por método de pago"""
+    metodo_pago: str
+    total_ventas: float
+    cantidad_transacciones: int
+    porcentaje: float
+
+
+class VentaDetalleItem(BaseModel):
+    """Item de venta"""
+    producto: str
+    sku: str
+    cantidad: float
+    precio_unitario: float
+    subtotal: float
+
+
+class VentaDetalle(BaseModel):
+    """Detalle de una venta"""
+    venta_id: str
+    fecha: datetime
+    total: float
+    metodo_pago: str
+    estado: str
+    items: List[VentaDetalleItem]
+
+
+@router.get("/por-categoria", response_model=List[VentasPorCategoria])
+async def ventas_por_categoria(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    dias: int = Query(30, ge=1, le=365)
+) -> List[VentasPorCategoria]:
+    """
+    Ventas agrupadas por categoría de producto
+    """
+    from sqlalchemy import text
+    
+    fecha_desde = datetime.utcnow() - timedelta(days=dias)
+    
+    sql = text("""
+        WITH ventas_categoria AS (
+            SELECT 
+                COALESCE(p.category, 'Sin categoría') as category,
+                SUM(dv.precio_unitario * dv.cantidad) as total_ventas,
+                COUNT(DISTINCT dv.producto_id) as cantidad_productos
+            FROM detalle_ventas dv
+            INNER JOIN ventas v ON dv.venta_id = v.id
+            INNER JOIN productos p ON dv.producto_id = p.id
+            WHERE v.tienda_id = :tienda_id
+              AND v.fecha >= :fecha_desde
+              AND v.status_pago = 'pagado'
+            GROUP BY p.category
+        ),
+        total_ventas AS (
+            SELECT SUM(total_ventas) as total FROM ventas_categoria
+        )
+        SELECT 
+            vc.category,
+            vc.total_ventas,
+            vc.cantidad_productos,
+            (vc.total_ventas / NULLIF(tv.total, 0) * 100) as porcentaje
+        FROM ventas_categoria vc
+        CROSS JOIN total_ventas tv
+        ORDER BY vc.total_ventas DESC
+    """)
+    
+    result = await session.execute(sql, {
+        "tienda_id": str(current_tienda.id),
+        "fecha_desde": fecha_desde
+    })
+    rows = result.fetchall()
+    
+    return [
+        VentasPorCategoria(
+            category=row[0],
+            total_ventas=float(row[1] or 0),
+            cantidad_productos=row[2] or 0,
+            porcentaje=float(row[3] or 0)
+        )
+        for row in rows
+    ]
+
+
+@router.get("/por-metodo-pago", response_model=List[VentasPorMetodoPago])
+async def ventas_por_metodo_pago(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    dias: int = Query(30, ge=1, le=365)
+) -> List[VentasPorMetodoPago]:
+    """
+    Ventas agrupadas por método de pago
+    """
+    from sqlalchemy import text
+    
+    fecha_desde = datetime.utcnow() - timedelta(days=dias)
+    
+    sql = text("""
+        WITH ventas_metodo AS (
+            SELECT 
+                COALESCE(metodo_pago, 'No especificado') as metodo_pago,
+                SUM(total) as total_ventas,
+                COUNT(*) as cantidad_transacciones
+            FROM ventas
+            WHERE tienda_id = :tienda_id
+              AND fecha >= :fecha_desde
+              AND status_pago = 'pagado'
+            GROUP BY metodo_pago
+        ),
+        total_ventas AS (
+            SELECT SUM(total_ventas) as total FROM ventas_metodo
+        )
+        SELECT 
+            vm.metodo_pago,
+            vm.total_ventas,
+            vm.cantidad_transacciones,
+            (vm.total_ventas / NULLIF(tv.total, 0) * 100) as porcentaje
+        FROM ventas_metodo vm
+        CROSS JOIN total_ventas tv
+        ORDER BY vm.total_ventas DESC
+    """)
+    
+    result = await session.execute(sql, {
+        "tienda_id": str(current_tienda.id),
+        "fecha_desde": fecha_desde
+    })
+    rows = result.fetchall()
+    
+    return [
+        VentasPorMetodoPago(
+            metodo_pago=row[0],
+            total_ventas=float(row[1] or 0),
+            cantidad_transacciones=row[2] or 0,
+            porcentaje=float(row[3] or 0)
+        )
+        for row in rows
+    ]
+
+
+@router.get("/ventas-detalle", response_model=List[VentaDetalle])
+async def ventas_detalle(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    fecha_inicio: Optional[datetime] = Query(None),
+    fecha_fin: Optional[datetime] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0)
+) -> List[VentaDetalle]:
+    """
+    Lista detallada de ventas individuales con items
+    """
+    from sqlalchemy import text
+    
+    # Defaults de fechas
+    if fecha_fin is None:
+        fecha_fin = datetime.utcnow()
+    if fecha_inicio is None:
+        fecha_inicio = fecha_fin - timedelta(days=30)
+    
+    sql = text("""
+        SELECT 
+            v.id::text as venta_id,
+            v.fecha,
+            v.total,
+            COALESCE(v.metodo_pago, 'No especificado') as metodo_pago,
+            v.status_pago as estado,
+            json_agg(
+                json_build_object(
+                    'producto', p.nombre,
+                    'sku', p.sku,
+                    'cantidad', dv.cantidad,
+                    'precio_unitario', dv.precio_unitario,
+                    'subtotal', dv.cantidad * dv.precio_unitario
+                )
+            ) as items
+        FROM ventas v
+        LEFT JOIN detalle_ventas dv ON v.id = dv.venta_id
+        LEFT JOIN productos p ON dv.producto_id = p.id
+        WHERE v.tienda_id = :tienda_id
+          AND v.fecha >= :fecha_inicio
+          AND v.fecha <= :fecha_fin
+        GROUP BY v.id, v.fecha, v.total, v.metodo_pago, v.status_pago
+        ORDER BY v.fecha DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    
+    result = await session.execute(sql, {
+        "tienda_id": str(current_tienda.id),
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "limit": limit,
+        "offset": offset
+    })
+    rows = result.fetchall()
+    
+    ventas_list = []
+    for row in rows:
+        items = []
+        if row[5]:  # items json
+            for item_data in row[5]:
+                items.append(VentaDetalleItem(
+                    producto=item_data.get('producto', ''),
+                    sku=item_data.get('sku', ''),
+                    cantidad=float(item_data.get('cantidad', 0)),
+                    precio_unitario=float(item_data.get('precio_unitario', 0)),
+                    subtotal=float(item_data.get('subtotal', 0))
+                ))
+        
+        ventas_list.append(VentaDetalle(
+            venta_id=row[0],
+            fecha=row[1],
+            total=float(row[2]),
+            metodo_pago=row[3],
+            estado=row[4],
+            items=items
+        ))
+    
+    return ventas_list
+
+
+@router.get("/export/csv")
+async def exportar_csv(
+    current_tienda: CurrentTienda,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    tipo: str = Query(..., description="Tipo de reporte: 'ventas', 'productos', 'inventario'"),
+    dias: int = Query(30, ge=1, le=365)
+):
+    """
+    Exportar reportes a CSV
+    """
+    from fastapi.responses import StreamingResponse
+    import io
+    import csv
+    
+    fecha_desde = datetime.utcnow() - timedelta(days=dias)
+    
+    if tipo == 'ventas':
+        # CSV de ventas
+        from sqlalchemy import text
+        sql = text("""
+            SELECT 
+                v.id::text as venta_id,
+                v.fecha,
+                v.total,
+                v.metodo_pago,
+                v.status_pago,
+                p.nombre as producto,
+                p.sku,
+                dv.cantidad,
+                dv.precio_unitario,
+                (dv.cantidad * dv.precio_unitario) as subtotal
+            FROM ventas v
+            LEFT JOIN detalle_ventas dv ON v.id = dv.venta_id
+            LEFT JOIN productos p ON dv.producto_id = p.id
+            WHERE v.tienda_id = :tienda_id
+              AND v.fecha >= :fecha_desde
+            ORDER BY v.fecha DESC
+        """)
+        
+        result = await session.execute(sql, {
+            "tienda_id": str(current_tienda.id),
+            "fecha_desde": fecha_desde
+        })
+        rows = result.fetchall()
+        
+        # Crear CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Headers
+        writer.writerow(['Venta ID', 'Fecha', 'Total', 'Método Pago', 'Estado', 
+                        'Producto', 'SKU', 'Cantidad', 'Precio Unitario', 'Subtotal'])
+        
+        # Datos
+        for row in rows:
+            writer.writerow(row)
+        
+        # Retornar como descarga
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=reporte_ventas_{datetime.now().strftime('%Y%m%d')}.csv"
+            }
+        )
+    
+    else:
+        return {"error": "Tipo de reporte no soportado. Use: 'ventas'"}
+

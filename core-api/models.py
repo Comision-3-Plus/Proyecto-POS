@@ -19,30 +19,17 @@ from schemas_models.ecommerce_models import (  # noqa: F401
     ProductMapping,
     APIKey
 )
-from schemas_models.loyalty_models import (  # noqa: F401
-    CustomerWallet,
-    WalletTransaction,
-    GiftCard,
-    GiftCardUso,
-    LoyaltyProgram
+from schemas_models.retail_models import (  # noqa: F401
+    ProductCategory,
+    Webhook,
+    ProductoLegacy
 )
-from schemas_models.promo_models import (  # noqa: F401
-    Promocion,
-    PromocionUso
-)
-from schemas_models.rfid_models import (  # noqa: F401
-    RFIDTag,
-    RFIDScanSession,
-    RFIDScanItem,
-    RFIDReader,
-    RFIDInventoryDiscrepancy
-)
-from schemas_models.oms_models import (  # noqa: F401
-    OrdenOmnicanal,
-    OrdenItem,
-    ShippingZone,
-    LocationCapability
-)
+
+# ⚠️ MODELOS ELIMINADOS (tablas eliminadas en migración):
+# - loyalty_models: CustomerWallet, WalletTransaction, GiftCard, GiftCardUso, LoyaltyProgram
+# - promo_models: Promocion, PromocionUso
+# - rfid_models: RFIDTag, RFIDScanSession, RFIDScanItem, RFIDReader, RFIDInventoryDiscrepancy
+# - oms_models: OrdenOmnicanal, OrdenItem, ShippingZone, LocationCapability
 
 
 class Tienda(SQLModel, table=True):
@@ -96,6 +83,10 @@ class Tienda(SQLModel, table=True):
     sizes: List["Size"] = Relationship(back_populates="tienda")
     colors: List["Color"] = Relationship(back_populates="tienda")
     products: List["Product"] = Relationship(back_populates="tienda")
+    
+    # ✅ RETAIL: Categorías y webhooks
+    product_categories: List["ProductCategory"] = Relationship(back_populates="tienda")
+    webhooks: List["Webhook"] = Relationship(back_populates="tienda")
 
 
 # =====================================================
@@ -129,6 +120,12 @@ class Size(SQLModel, table=True):
         default=0,
         nullable=False,
         description="Orden para mostrar (S=1, M=2, L=3, etc.)"
+    )
+    category: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        description="Categoría de talle: numeric (42, 44), alpha (S, M, L), shoe (38, 39)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -168,6 +165,12 @@ class Color(SQLModel, table=True):
         max_length=7,
         nullable=True,
         description="Código hexadecimal del color para UI: #FF0000"
+    )
+    sample_image_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        nullable=True,
+        description="URL de imagen de muestra del color/textura"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -277,6 +280,66 @@ class Product(SQLModel, table=True):
         nullable=True,
         description="Categoría del producto: indumentaria, calzado, accesorios"
     )
+    
+    # ✅ NUEVOS CAMPOS RETAIL DE ROPA
+    season: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        description="Temporada: Verano 2025, Invierno 2024, Primavera-Verano 2025"
+    )
+    brand: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="Marca: Nike, Adidas, Zara, Propia"
+    )
+    material: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        nullable=True,
+        description="Material: Algodón 100%, Poliéster 65% Algodón 35%"
+    )
+    care_instructions: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Instrucciones de cuidado: Lavar a mano, No planchar"
+    )
+    country_of_origin: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="País de origen: Argentina, China, Bangladesh"
+    )
+    images: Optional[List[str]] = Field(
+        default=None,
+        sa_column=Column(JSONB),
+        description="Array de URLs de imágenes: ['https://...jpg', 'https://...jpg']"
+    )
+    meta_title: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        nullable=True,
+        description="Título SEO para e-commerce"
+    )
+    meta_description: Optional[str] = Field(
+        default=None,
+        nullable=True,
+        description="Descripción SEO para e-commerce"
+    )
+    tags: Optional[List[str]] = Field(
+        default=None,
+        sa_column=Column(JSONB),
+        description="Tags para búsqueda: ['verano', 'casual', 'deportivo']"
+    )
+    category_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="product_categories.id",
+        nullable=True,
+        index=True,
+        description="ID de la categoría del producto"
+    )
+    
     is_active: bool = Field(
         default=True,
         nullable=False,
@@ -293,6 +356,7 @@ class Product(SQLModel, table=True):
     
     # Relaciones
     tienda: Optional["Tienda"] = Relationship(back_populates="products")
+    category: Optional["ProductCategory"] = Relationship(back_populates="products")
     variants: List["ProductVariant"] = Relationship(
         back_populates="product",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}

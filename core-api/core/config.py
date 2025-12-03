@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     AFIP_CUIT: Optional[str] = None
     AFIP_PRODUCTION: bool = False  # False = Testing, True = Producción
     
+    # Shopify OAuth
+    SHOPIFY_CLIENT_ID: Optional[str] = None
+    SHOPIFY_CLIENT_SECRET: Optional[str] = None
+    SHOPIFY_REDIRECT_URI: Optional[str] = None
+    
+    # URLs de la aplicación
+    BASE_URL: str = "http://localhost:8000"  # URL del backend
+    FRONTEND_URL: str = "http://localhost:5173"  # URL del frontend
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

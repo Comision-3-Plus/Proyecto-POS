@@ -1,396 +1,227 @@
 /**
- * Stock Screen - Gestión de Inventario Multi-Ubicación
- * Vista con filtros por almacén y alertas de stock bajo
+ * Stock Screen - Gestión de Inventario con datos reales
+ * Inventory Ledger System conectado a la API
  */
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  Warehouse,
-  AlertTriangle,
-  Package,
-  TrendingUp,
-  Download,
-  Filter,
-  Search,
-} from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, MapPin, Plus } from 'lucide-react';
+// TODO: Import when implementing transfer modal
+// import { ArrowRightLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import Table from '@/components/ui/Table';
-
-interface StockItem {
-  id: number;
-  producto: string;
-  sku: string;
-  deposito_central: number;
-  deposito_norte: number;
-  deposito_sur: number;
-  stock_minimo: number;
-  precio_costo: number;
-  valor_total: number;
-}
-
-const mockStock: StockItem[] = [
-  {
-    id: 1,
-    producto: 'Laptop Dell XPS 15',
-    sku: 'LAP-XPS-001',
-    deposito_central: 45,
-    deposito_norte: 12,
-    deposito_sur: 8,
-    stock_minimo: 20,
-    precio_costo: 1250000,
-    valor_total: 81250000,
-  },
-  {
-    id: 2,
-    producto: 'Mouse Logitech MX Master 3',
-    sku: 'ACC-MOU-002',
-    deposito_central: 3,
-    deposito_norte: 5,
-    deposito_sur: 2,
-    stock_minimo: 15,
-    precio_costo: 12500,
-    valor_total: 125000,
-  },
-];
+import Spinner from '@/components/ui/Spinner';
+import { useStockResumen, useLowStockProducts } from '@/hooks/useStockQuery';
+// TODO: Import when implementing modals
+// import { useLocations, useCreateAdjustment, useTransferStock } from '@/hooks/useStockQuery';
 
 export default function Stock() {
-  const [filtroDeposito, setFiltroDeposito] = useState<string>('todos');
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  // TODO: Implement transfer modal
+  // const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<any>(null);
 
-  const stats = [
-    {
-      label: 'Valor Total Inventario',
-      value: '$124.5M',
-      change: '+8.2%',
-      icon: TrendingUp,
-      trend: 'up' as const,
-    },
-    {
-      label: 'Productos en Stock',
-      value: '1,284',
-      change: '+12',
-      icon: Package,
-      trend: 'up' as const,
-    },
-    {
-      label: 'Alertas Stock Bajo',
-      value: '47',
-      change: '-5',
-      icon: AlertTriangle,
-      trend: 'down' as const,
-    },
-    {
-      label: 'Ubicaciones',
-      value: '3',
-      change: '0',
-      icon: Warehouse,
-      trend: 'neutral' as const,
-    },
-  ];
+  const { data: stockData = [], isLoading } = useStockResumen();
+  const { data: lowStockData = [] } = useLowStockProducts(10);
+  // TODO: Implement adjustment/transfer functionality
+  // const { data: locations = [] } = useLocations();
+  // const adjustmentMutation = useCreateAdjustment();
+  // const transferMutation = useTransferStock();
+
+  const totalStock = stockData.reduce((sum, item) => sum + item.stock_total, 0);
+  const totalProducts = stockData.length;
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl shadow-sm shadow-gray-200/20">
+      <div className="sticky top-0 z-10 border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl shadow-sm">
         <div className="px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 tracking-tight">
-                Gestión de Stock
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                Control de inventario multi-ubicación
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="secondary" size="sm">
-                <Download className="w-4 h-4" />
-                Exportar
-              </Button>
-              <Button variant="primary" size="sm">
-                <Package className="w-4 h-4" />
-                Ajustar Stock
-              </Button>
-            </div>
-          </div>
+          <h2 className="text-lg font-semibold text-gray-900">Gestión de Stock</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {totalProducts} productos · {totalStock.toFixed(0)} unidades totales
+          </p>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {stats.map((stat, index) => {
-            // Calcular porcentaje para el gráfico circular
-            const percentage = stat.trend === 'up' ? 75 : stat.trend === 'down' ? 35 : 50;
-            const circumference = 2 * Math.PI * 20;
-            const strokeDashoffset = circumference - (percentage / 100) * circumference;
-            
-            return (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="relative bg-white/95 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/60 hover:shadow-2xl hover:shadow-gray-200/40 transition-all duration-500 hover:-translate-y-1 cursor-pointer overflow-hidden group"
-              >
-                {/* Background gradient overlay */}
-                <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${
-                  stat.trend === 'up' ? 'bg-gradient-to-br from-success-500/5 to-emerald-500/5' :
-                  stat.trend === 'down' ? 'bg-gradient-to-br from-danger-500/5 to-rose-500/5' :
-                  'bg-gradient-to-br from-gray-500/5 to-gray-500/5'
-                }`} />
-                
-                <div className="relative flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-3">
-                      {stat.label}
-                    </p>
-                    <p className="text-3xl font-black text-gray-900 tracking-tight mb-3">
-                      {stat.value}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        stat.trend === 'up' ? 'bg-gradient-to-r from-success-500 to-emerald-500 text-white shadow-lg shadow-success-500/40' :
-                        stat.trend === 'down' ? 'bg-gradient-to-r from-danger-500 to-rose-500 text-white shadow-lg shadow-danger-500/40' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {stat.change}
-                      </div>
-                      <span className="text-xs text-gray-400 font-medium">vs mes anterior</span>
-                    </div>
+      <div className="flex-1 overflow-auto px-6 py-6 space-y-6">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="bg-white/95 rounded-2xl p-6 border border-gray-200/60">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                <Package className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+                <p className="text-sm text-gray-500">Productos</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/95 rounded-2xl p-6 border border-gray-200/60">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{totalStock.toFixed(0)}</p>
+                <p className="text-sm text-gray-500">Unidades Totales</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/95 rounded-2xl p-6 border border-gray-200/60">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{lowStockData.length}</p>
+                <p className="text-sm text-gray-500">Bajo Stock</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Alertas de Bajo Stock */}
+        {lowStockData.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <h3 className="text-sm font-semibold text-red-900">Productos con Bajo Stock</h3>
+            </div>
+            <div className="space-y-2">
+              {lowStockData.slice(0, 5).map((item) => (
+                <div key={item.variant_id} className="flex items-center justify-between p-3 bg-white rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">{item.product_name}</p>
+                    <p className="text-sm text-gray-500">SKU: {item.sku}</p>
                   </div>
-                  
-                  {/* Mini circular progress chart */}
-                  <div className="relative">
-                    <svg className="w-16 h-16 -rotate-90" viewBox="0 0 48 48">
-                      {/* Background circle */}
-                      <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        fill="none"
-                        stroke="#f3f4f6"
-                        strokeWidth="4"
-                      />
-                      {/* Progress circle */}
-                      <circle
-                        cx="24"
-                        cy="24"
-                        r="20"
-                        fill="none"
-                        stroke={stat.trend === 'up' ? 'url(#gradient-success)' : stat.trend === 'down' ? 'url(#gradient-danger)' : '#9ca3af'}
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                        className="transition-all duration-1000"
-                      />
-                      <defs>
-                        <linearGradient id="gradient-success" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#10b981" />
-                          <stop offset="100%" stopColor="#059669" />
-                        </linearGradient>
-                        <linearGradient id="gradient-danger" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#ef4444" />
-                          <stop offset="100%" stopColor="#dc2626" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <stat.icon className={`w-6 h-6 ${
-                        stat.trend === 'up' ? 'text-success-600' :
-                        stat.trend === 'down' ? 'text-danger-600' :
-                        'text-gray-500'
-                      }`} />
-                    </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-red-600">{item.stock_total.toFixed(0)}</p>
+                    <p className="text-xs text-gray-500">unidades</p>
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tabla de Stock */}
+        <div className="bg-white/95 rounded-2xl p-6 border border-gray-200/60">
+          <h3 className="text-sm font-semibold mb-4">Inventario por Producto</h3>
+
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Spinner />
+            </div>
+          ) : stockData.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-sm text-gray-500">No hay productos en stock</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Producto</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">SKU</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Variante</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Stock Total</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Ubicaciones</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockData.map((item) => (
+                    <motion.tr
+                      key={item.variant_id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-gray-900">{item.product_name}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <code className="text-sm text-gray-600">{item.sku}</code>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-sm text-gray-600">
+                          {item.size_name && <span className="mr-2">Talla: {item.size_name}</span>}
+                          {item.color_name && <span>Color: {item.color_name}</span>}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <span className={`font-semibold ${item.stock_total <= 10 ? 'text-red-600' : 'text-gray-900'}`}>
+                          {item.stock_total.toFixed(0)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="space-y-1">
+                          {item.stock_by_location.map((loc) => (
+                            <div key={loc.location_id} className="flex items-center gap-2 text-sm text-gray-600">
+                              <MapPin className="w-3 h-3" />
+                              <span>{loc.location_name}: {loc.stock.toFixed(0)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedVariant(item);
+                              setShowAdjustmentModal(true);
+                            }}
+                            className="p-2 hover:bg-gray-200 rounded-lg"
+                            title="Ajustar Stock"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                          {/* TODO: Implement transfer modal
+                          <button
+                            onClick={() => {
+                              setSelectedVariant(item);
+                              setShowTransferModal(true);
+                            }}
+                            className="p-2 hover:bg-gray-200 rounded-lg"
+                            title="Transferir"
+                          >
+                            <ArrowRightLeft className="w-4 h-4" />
+                          </button>
+                          */}
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="px-6 pb-6">
-        <div className="flex items-center gap-4">
-          <div className="flex-1 relative group max-w-lg">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/30 group-focus-within:shadow-primary-500/50 transition-shadow">
-              <Search className="w-4.5 h-4.5 text-white" />
-            </div>
-            <input
-              type="text"
-              placeholder="Buscar productos por nombre, SKU o categoría..."
-              className="w-full h-12 pl-14 pr-4 bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-400 focus:shadow-lg focus:shadow-primary-500/10 transition-all"
-            />
-          </div>
-          
-          {/* Warehouse selector con visual */}
-          <div className="relative">
-            <select
-              value={filtroDeposito}
-              onChange={(e) => setFiltroDeposito(e.target.value)}
-              className="h-12 pl-12 pr-10 bg-white/90 backdrop-blur-sm border border-gray-200/80 rounded-xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all appearance-none shadow-md hover:shadow-lg cursor-pointer"
-            >
-              <option value="todos">Todos los depósitos</option>
-              <option value="central">Depósito Central</option>
-              <option value="norte">Depósito Norte</option>
-              <option value="sur">Depósito Sur</option>
-            </select>
-            <Warehouse className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-600 pointer-events-none" />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+      {/* Modals (simplified for now - would need full implementation) */}
+      {showAdjustmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Ajustar Stock</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {selectedVariant?.product_name} - {selectedVariant?.sku}
+            </p>
+            <p className="text-xs text-gray-400 mb-4">
+              Implementar formulario de ajuste aquí
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowAdjustmentModal(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary">Guardar</Button>
             </div>
           </div>
-          
-          <Button variant="secondary" size="md" className="h-12 shadow-md hover:shadow-lg">
-            <Filter className="w-4 h-4" />
-            Filtros Avanzados
-          </Button>
         </div>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 px-6 pb-6 overflow-hidden">
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-gray-200/60 h-full overflow-auto shadow-2xl shadow-gray-200/30">
-          <Table
-            columns={[
-              { key: 'producto', header: 'Producto' },
-              { key: 'sku', header: 'SKU' },
-              { key: 'distribucion', header: 'Distribución Multi-Ubicación' },
-              { key: 'total', header: 'Total' },
-              { key: 'alerta', header: 'Estado' },
-              { key: 'valor_total', header: 'Valor Total' },
-            ]}
-            keyExtractor={(item) => String(item.id)}
-            data={mockStock.map((item) => {
-              const totalStock = item.deposito_central + item.deposito_norte + item.deposito_sur;
-              const isBajo = totalStock < item.stock_minimo;
-              const isCritico = totalStock < item.stock_minimo * 0.5;
-              
-              // Calcular porcentajes para heat map
-              const pctCentral = (item.deposito_central / totalStock) * 100;
-              const pctNorte = (item.deposito_norte / totalStock) * 100;
-              const pctSur = (item.deposito_sur / totalStock) * 100;
-              
-              return {
-                id: item.id,
-                producto: (
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl flex items-center justify-center border border-gray-200/50 shadow-sm">
-                      <Package className="w-5 h-5 text-gray-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {item.producto}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">ID: {item.id}</p>
-                    </div>
-                  </div>
-                ),
-                sku: (
-                  <code className="text-xs bg-gradient-to-br from-gray-50 to-gray-100 px-3 py-1.5 rounded-lg text-gray-700 font-mono border border-gray-200/50">{item.sku}</code>
-                ),
-                distribucion: (
-                  <div className="space-y-2 min-w-[280px]">
-                    {/* Central */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 min-w-[70px]">
-                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary-500 to-primary-600" />
-                        <span className="text-xs font-medium text-gray-600">Central</span>
-                      </div>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all duration-500"
-                          style={{ width: `${pctCentral}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-gray-900 min-w-[35px] text-right">{item.deposito_central}</span>
-                    </div>
-                    {/* Norte */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 min-w-[70px]">
-                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-cyan-500 to-cyan-600" />
-                        <span className="text-xs font-medium text-gray-600">Norte</span>
-                      </div>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-full transition-all duration-500"
-                          style={{ width: `${pctNorte}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-gray-900 min-w-[35px] text-right">{item.deposito_norte}</span>
-                    </div>
-                    {/* Sur */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 min-w-[70px]">
-                        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-violet-500 to-violet-600" />
-                        <span className="text-xs font-medium text-gray-600">Sur</span>
-                      </div>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all duration-500"
-                          style={{ width: `${pctSur}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-gray-900 min-w-[35px] text-right">{item.deposito_sur}</span>
-                    </div>
-                  </div>
-                ),
-                total: (
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-lg font-black text-gray-900">
-                      {totalStock}
-                    </span>
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">unidades</span>
-                  </div>
-                ),
-                alerta: (
-                  <div className="flex flex-col gap-1.5">
-                    {isCritico ? (
-                      <>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-br from-danger-500 to-rose-600 shadow-lg shadow-danger-500/40">
-                          <AlertTriangle className="w-3.5 h-3.5 text-white animate-pulse" />
-                          <span className="text-xs font-bold text-white">CRÍTICO</span>
-                        </div>
-                        <span className="text-[10px] text-danger-600 font-medium">Reordenar urgente</span>
-                      </>
-                    ) : isBajo ? (
-                      <>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-br from-warning-400 to-amber-500 shadow-lg shadow-warning-500/40">
-                          <AlertTriangle className="w-3.5 h-3.5 text-white" />
-                          <span className="text-xs font-bold text-white">BAJO</span>
-                        </div>
-                        <span className="text-[10px] text-warning-600 font-medium">Revisar stock</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-br from-success-500 to-emerald-600 shadow-md">
-                          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                          <span className="text-xs font-bold text-white">NORMAL</span>
-                        </div>
-                        <span className="text-[10px] text-success-600 font-medium">Stock adecuado</span>
-                      </>
-                    )}
-                  </div>
-                ),
-                valor_total: (
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span className="text-sm font-bold text-gray-900">
-                      ${item.valor_total.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-gray-500 font-medium">
-                      ${item.precio_costo.toLocaleString()} c/u
-                    </span>
-                  </div>
-                ),
-              };
-            })}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

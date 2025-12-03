@@ -4,26 +4,36 @@
  */
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Search, Filter } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Download, Upload, Trash2 } from 'lucide-react';
 import { useProductosQuery } from '@/hooks/useProductosQuery';
 import Table, { Column } from '@/components/ui/Table';
 import Button from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
+import CreateProductModal from '@/components/productos/CreateProductModal';
 import type { Product } from '@/types/api';
 
 export default function Productos() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<string>('nombre');
+  const [sortBy, setSortBy] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: productos = [], isLoading, error } = useProductosQuery();
 
   // Filter and sort
   const filteredProductos = productos
-    .filter((p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.base_sku?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    .filter((p) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.base_sku?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilter = filterActive === 'all' ||
+        (filterActive === 'active' && p.is_active) ||
+        (filterActive === 'inactive' && !p.is_active);
+      return matchesSearch && matchesFilter;
+    })
     .sort((a, b) => {
       const aValue = (a as unknown as Record<string, unknown>)[sortBy];
       const bValue = (b as unknown as Record<string, unknown>)[sortBy];
@@ -38,6 +48,39 @@ export default function Productos() {
       return 0;
     });
 
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredProductos.length) {
+      setSelectedIds(new Set());
+      setShowBulkActions(false);
+    } else {
+      setSelectedIds(new Set(filteredProductos.map((p) => p.product_id)));
+      setShowBulkActions(true);
+    }
+  };
+
+  const handleSelectProduct = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+    setShowBulkActions(newSelected.size > 0);
+  };
+
+  const handleBulkDelete = () => {
+    console.log('Deleting:', Array.from(selectedIds));
+    // TODO: Implement bulk delete
+    setSelectedIds(new Set());
+    setShowBulkActions(false);
+  };
+
+  const handleBulkExport = () => {
+    console.log('Exporting:', Array.from(selectedIds));
+    // TODO: Implement export
+  };
+
   const handleSort = (key: string) => {
     if (sortBy === key) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -48,6 +91,27 @@ export default function Productos() {
   };
 
   const columns: Column<Product>[] = [
+    {
+      key: 'select',
+      header: (
+        <input
+          type="checkbox"
+          checked={selectedIds.size === filteredProductos.length && filteredProductos.length > 0}
+          onChange={handleSelectAll}
+          className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
+        />
+      ),
+      sortable: false,
+      width: '50px',
+      render: (p) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(p.product_id)}
+          onChange={() => handleSelectProduct(p.product_id)}
+          className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
+        />
+      ),
+    },
     {
       key: 'base_sku',
       header: 'Código',
@@ -187,11 +251,52 @@ export default function Productos() {
             </div>
           </div>
         </div>
-        <Button variant="primary" size="md" className="shadow-lg shadow-primary-500/40 hover:shadow-xl hover:shadow-primary-500/50">
+        <Button 
+          variant="primary" 
+          size="md" 
+          className="shadow-lg shadow-primary-500/40 hover:shadow-xl hover:shadow-primary-500/50"
+          onClick={() => setShowCreateModal(true)}
+        >
           <Plus className="w-5 h-5" />
           Nuevo Producto
         </Button>
       </motion.div>
+
+      {/* Modal de creación */}
+      <CreateProductModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
+
+      {/* Bulk Actions Bar */}
+      <AnimatePresence>
+        {showBulkActions && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -20, height: 0 }}
+            className="overflow-hidden"
+          >
+            <Alert variant="info" className="border-primary-300 bg-primary-50">
+              <div className="flex items-center justify-between">
+                <p className="font-bold">
+                  {selectedIds.size} producto{selectedIds.size !== 1 ? 's' : ''} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={handleBulkExport}>
+                    <Download className="w-4 h-4" />
+                    Exportar
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={handleBulkDelete}>
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filters */}
       <motion.div
@@ -214,9 +319,44 @@ export default function Productos() {
             />
           </div>
         </div>
+        
+        {/* Status Filter */}
+        <div className="flex items-center gap-2 p-1 bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-xl shadow-md">
+          <button
+            onClick={() => setFilterActive('all')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              filterActive === 'all'
+                ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/40'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFilterActive('active')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              filterActive === 'active'
+                ? 'bg-gradient-to-br from-success-500 to-emerald-500 text-white shadow-lg shadow-success-500/40'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Activos
+          </button>
+          <button
+            onClick={() => setFilterActive('inactive')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              filterActive === 'inactive'
+                ? 'bg-gradient-to-br from-gray-500 to-gray-600 text-white shadow-lg shadow-gray-500/40'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Inactivos
+          </button>
+        </div>
+
         <Button variant="secondary" size="md" className="h-12 shadow-md hover:shadow-lg hover:shadow-gray-200/40">
-          <Filter className="w-5 h-5" />
-          Filtros
+          <Upload className="w-5 h-5" />
+          Importar
         </Button>
       </motion.div>
 

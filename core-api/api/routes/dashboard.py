@@ -62,7 +62,7 @@ class DashboardResumen(BaseModel):
 # === ENDPOINTS ===
 
 @router.get("/resumen", response_model=DashboardResumen)
-# @cached(ttl_seconds=60, key_prefix="dashboard")  # Cache deshabilitado temporalmente
+@cached(ttl_seconds=30, key_prefix="dashboard")  # Cache habilitado - 30 segundos
 async def obtener_dashboard_resumen(
     current_tienda: CurrentTienda,
     session: Annotated[AsyncSession, Depends(get_session)]
@@ -76,7 +76,7 @@ async def obtener_dashboard_resumen(
     - Productos destacados
     - Alertas críticas
     
-    **Cacheado por 60 segundos para mejor performance**
+    **Cacheado por 30 segundos para mejor performance**
     """
     logger.info(f"Generando dashboard para tienda {current_tienda.id}")
     

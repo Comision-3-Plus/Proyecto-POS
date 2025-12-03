@@ -384,43 +384,99 @@ async def listar_productos(
     is_active: Optional[bool] = True
 ) -> List[ProductRead]:
     """
-    Lista productos padre (sin variantes inline)
+    Lista productos padre CON primera variante y stock para UI rápida
     
-    Para ver las variantes,usar GET /productos/{id}/variants
+    Optimizado con SQL directo para mejor performance
     """
-    query = select(Product).where(Product.tienda_id == current_tienda.id)
+    from sqlalchemy import text
+    
+    sql = """
+        SELECT 
+            p.product_id,
+            p.tienda_id,
+            p.name,
+            p.base_sku,
+            p.description,
+            p.category,
+            p.is_active,
+            p.created_at,
+            p.updated_at,
+            COUNT(DISTINCT pv.variant_id) FILTER (WHERE pv.is_active = true) as variants_count,
+            (SELECT json_agg(v_data)
+             FROM (
+                SELECT 
+                    pv2.variant_id,
+                    pv2.sku,
+                    pv2.price,
+                    pv2.is_active,
+                    COALESCE(SUM(il.delta), 0) as stock_total
+                FROM product_variants pv2
+                LEFT JOIN inventory_ledger il ON pv2.variant_id = il.variant_id
+                WHERE pv2.product_id = p.product_id AND pv2.is_active = true
+                GROUP BY pv2.variant_id, pv2.sku, pv2.price, pv2.is_active
+                ORDER BY pv2.created_at
+                LIMIT 1
+             ) v_data
+            ) as first_variant
+        FROM products p
+        LEFT JOIN product_variants pv ON p.product_id = pv.product_id
+        WHERE p.tienda_id = :tienda_id
+    """
+    
+    params = {"tienda_id": str(current_tienda.id)}
     
     if search:
-        search_pattern = f"%{search}%"
-        query = query.where(
-            (Product.name.ilike(search_pattern)) |
-            (Product.base_sku.ilike(search_pattern))
-        )
+        sql += " AND (p.name ILIKE :search OR p.base_sku ILIKE :search)"
+        params["search"] = f"%{search}%"
     
     if category:
-        query = query.where(Product.category == category)
+        sql += " AND p.category = :category"
+        params["category"] = category
     
     if is_active is not None:
-        query = query.where(Product.is_active == is_active)
+        sql += " AND p.is_active = :is_active"
+        params["is_active"] = is_active
     
-    query = query.offset(skip).limit(limit).order_by(Product.created_at.desc())
+    sql += """
+        GROUP BY p.product_id
+        ORDER BY p.created_at DESC
+        LIMIT :limit OFFSET :skip
+    """
     
-    result = await session.execute(query)
-    productos = result.scalars().all()
+    params["limit"] = limit
+    params["skip"] = skip
     
-    # Contar variantes por producto
+    result = await session.execute(text(sql), params)
+    rows = result.fetchall()
+    
+    # Construir respuesta
     productos_response = []
-    for producto in productos:
-        producto_dict = ProductRead.model_validate(producto).model_dump()
+    for row in rows:
+        variants = []
+        if row[10]:  # first_variant
+            variant_data = row[10][0] if isinstance(row[10], list) and len(row[10]) > 0 else row[10]
+            if variant_data:
+                variants.append({
+                    "variant_id": variant_data.get("variant_id"),
+                    "sku": variant_data.get("sku"),
+                    "price": variant_data.get("price"),
+                    "is_active": variant_data.get("is_active"),
+                    "stock_total": variant_data.get("stock_total", 0)
+                })
         
-        # Contar variantes activas
-        variants_count_query = select(func.count(ProductVariant.variant_id)).where(
-            ProductVariant.product_id == producto.product_id,
-            ProductVariant.is_active == True
-        )
-        variants_count_result = await session.execute(variants_count_query)
-        producto_dict['variants_count'] = variants_count_result.scalar()
-        
+        producto_dict = {
+            "product_id": str(row[0]),
+            "tienda_id": str(row[1]),
+            "name": row[2],
+            "base_sku": row[3],
+            "description": row[4],
+            "category": row[5],
+            "is_active": row[6],
+            "created_at": row[7],
+            "updated_at": row[8],
+            "variants_count": row[9] or 0,
+            "variants": variants
+        }
         productos_response.append(ProductRead(**producto_dict))
     
     return productos_response

@@ -4,7 +4,7 @@
  */
 
 import { useState, FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Store, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -111,8 +111,21 @@ export default function Login() {
             </Button>
           </form>
 
+          {/* Register Link */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              ¿No tienes cuenta?{' '}
+              <Link
+                to="/register"
+                className="font-bold text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                Crear mi tienda
+              </Link>
+            </p>
+          </div>
+
           {/* Demo credentials hint */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-4 pt-6 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
               Credenciales demo:{' '}
               <code className="bg-gray-100 px-2 py-1 rounded text-primary-600">

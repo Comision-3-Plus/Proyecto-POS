@@ -13,7 +13,7 @@ import type {
   QueryParams,
 } from '@/types/api';
 
-const BASE_PATH = '/productos';
+const BASE_PATH = '/productos/'; // ⭐ FIX: Barra final para evitar 307 redirect que pierde auth header
 
 export const productosService = {
   /**
@@ -28,7 +28,7 @@ export const productosService = {
    * Obtiene un producto por ID con variantes
    */
   async getById(productId: string): Promise<Product> {
-    const response = await apiClient.get<Product>(`${BASE_PATH}/${productId}`);
+    const response = await apiClient.get<Product>(`${BASE_PATH}${productId}`);
     return response.data;
   },
 
@@ -45,7 +45,7 @@ export const productosService = {
    */
   async getVariants(productId: string): Promise<ProductVariantWithStock[]> {
     const response = await apiClient.get<ProductVariantWithStock[]>(
-      `${BASE_PATH}/${productId}/variants`
+      `${BASE_PATH}${productId}/variants`
     );
     return response.data;
   },
@@ -54,7 +54,7 @@ export const productosService = {
    * Lista talles disponibles
    */
   async getSizes(): Promise<Size[]> {
-    const response = await apiClient.get<Size[]>(`${BASE_PATH}/sizes`);
+    const response = await apiClient.get<Size[]>(`${BASE_PATH}sizes`);
     return response.data;
   },
 
@@ -62,7 +62,7 @@ export const productosService = {
    * Lista colores disponibles
    */
   async getColors(): Promise<Color[]> {
-    const response = await apiClient.get<Color[]>(`${BASE_PATH}/colors`);
+    const response = await apiClient.get<Color[]>(`${BASE_PATH}colors`);
     return response.data;
   },
 
@@ -70,7 +70,7 @@ export const productosService = {
    * Lista ubicaciones (sucursales/depósitos)
    */
   async getLocations(): Promise<Location[]> {
-    const response = await apiClient.get<Location[]>(`${BASE_PATH}/locations`);
+    const response = await apiClient.get<Location[]>(`${BASE_PATH}locations`);
     return response.data;
   },
 };

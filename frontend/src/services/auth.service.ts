@@ -7,6 +7,15 @@ import type { LoginRequest, AuthResponse, User } from '@/types/api';
 
 const BASE_PATH = '/auth';
 
+export interface RegisterRequest {
+  full_name: string;
+  email: string;
+  dni: string;
+  password: string;
+  tienda_nombre: string;
+  tienda_rubro: string;
+}
+
 export const authService = {
   /**
    * Login de usuario
@@ -15,6 +24,24 @@ export const authService = {
     const response = await apiClient.post<AuthResponse>(
       `${BASE_PATH}/login`,
       credentials
+    );
+
+    // Guardar token y usuario en localStorage
+    if (response.data.access_token) {
+      localStorage.setItem('access_token', response.data.access_token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Registro de nuevo usuario con tienda
+   */
+  async register(data: RegisterRequest): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>(
+      `${BASE_PATH}/register`,
+      data
     );
 
     // Guardar token y usuario en localStorage

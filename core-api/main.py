@@ -22,7 +22,7 @@ from core.exceptions import (
     sqlalchemy_exception_handler,
     generic_exception_handler
 )
-from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache, usuarios
+from api.routes import auth, productos, ventas, payments, insights, reportes, health, inventario, dashboard, exportar, admin, tiendas, caja, compras, sync, cache, usuarios, integrations, retail_analytics, clientes, stock
 
 
 @asynccontextmanager
@@ -47,11 +47,12 @@ async def lifespan(app: FastAPI):
     
     # Startup: Crear tablas en desarrollo
     # En producción usar Alembic para migraciones
-    try:
-        await init_db()
-        logger.info("Base de datos inicializada correctamente")
-    except Exception as e:
-        logger.warning(f"No se pudieron crear tablas (puede ser normal): {e}")
+    # NOTA: Desactivado porque usamos Alembic migrations
+    # try:
+    #     await init_db()
+    #     logger.info("Base de datos inicializada correctamente")
+    # except Exception as e:
+    #     logger.warning(f"No se pudieron crear tablas (puede ser normal): {e}")
     
     yield
     
@@ -100,8 +101,12 @@ app.include_router(tiendas.router, prefix=settings.API_V1_STR)  # ⭐ NUEVO - Si
 app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])  # ⭐ NUEVO
 app.include_router(sync.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 2 - Legacy Sync
 app.include_router(cache.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 3 - Redis Cache
+app.include_router(integrations.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 3 & 4 - Shopify + Custom Ecommerce
+app.include_router(retail_analytics.router, prefix=settings.API_V1_STR)  # ⭐ MÓDULO 6 - Análisis Retail
 app.include_router(productos.router, prefix=settings.API_V1_STR)
 app.include_router(ventas.router, prefix=settings.API_V1_STR)
+app.include_router(clientes.router, prefix=settings.API_V1_STR)  # ⭐ CRM - Gestión de clientes
+app.include_router(stock.router, prefix=settings.API_V1_STR)  # ⭐ Stock - Gestión de inventario
 app.include_router(payments.router, prefix=settings.API_V1_STR)
 app.include_router(insights.router, prefix=settings.API_V1_STR)
 app.include_router(reportes.router, prefix=settings.API_V1_STR)

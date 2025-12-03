@@ -3,7 +3,7 @@ Schemas Pydantic para Inventory Ledger System
 Requests y Responses para productos con variantes
 """
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
@@ -129,7 +129,7 @@ class ProductCreate(BaseModel):
 
 
 class ProductRead(BaseModel):
-    """Schema para leer un producto (sin variantes inline)"""
+    """Schema para leer un producto (con primera variante para UI)"""
     product_id: UUID
     tienda_id: UUID
     name: str
@@ -142,6 +142,9 @@ class ProductRead(BaseModel):
     
     # Conteo de variantes
     variants_count: Optional[int] = Field(None, description="Número de variantes activas")
+    
+    # Primera variante con stock (para UI rápida)
+    variants: List[Dict[str, Any]] = Field(default_factory=list, description="Primera variante con stock_total")
     
     model_config = {"from_attributes": True}
 

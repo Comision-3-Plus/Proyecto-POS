@@ -15,16 +15,17 @@ engine = create_async_engine(
     echo=False,  # ⚡ OPTIMIZACIÓN: Desactivado para producción (reduce overhead 30%)
     future=True,
     pool_pre_ping=True,  # ✅ VITAL para conexiones cloud: verifica si están vivas
-    pool_size=20,  # ⚡ Reducido a 20 porque Supabase ya tiene su propio pool
-    max_overflow=10,  # ⚡ Reducido porque PgBouncer maneja la concurrencia
-    pool_recycle=3600,  # ⚡ Reciclar conexiones cada hora para evitar stale connections
+    pool_size=5,  # ⚡ Reducido porque Supabase ya tiene su propio pool
+    max_overflow=5,  # ⚡ Reducido porque PgBouncer maneja la concurrencia
+    pool_recycle=300,  # ⚡ Reciclar conexiones cada 5 minutos
     pool_timeout=30,  # ⚡ Timeout de 30s para obtener conexión del pool
     # 🚨 CRÍTICO PARA PGBOUNCER: Desactivar prepared statements
     connect_args={
         "server_settings": {
             "jit": "off"  # Desactiva Just-In-Time compilation en serverless
         },
-        "statement_cache_size": 0  # ⚠️ OBLIGATORIO: PgBouncer en modo transacción rota conexiones
+        "statement_cache_size": 0,  # ⚠️ OBLIGATORIO: PgBouncer en modo transacción rota conexiones
+        "prepared_statement_cache_size": 0  # ⚠️ Alternativa para versiones más nuevas
     }
 )
 

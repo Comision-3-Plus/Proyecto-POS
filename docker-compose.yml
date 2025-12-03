@@ -101,37 +101,60 @@ services:
     container_name: super_pos_api
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
-      # Conexión DB
-      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-nexuspos}:${POSTGRES_PASSWORD:-nexuspos_secret}@db:5432/${POSTGRES_DB:-nexus_pos}"
-      POSTGRES_SERVER: db
-      POSTGRES_USER: ${POSTGRES_USER:-nexuspos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexuspos_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-nexus_pos}
-      POSTGRES_PORT: 5432
+      # Conexión DB - Usando Supabase
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL}
+      POSTGRES_SERVER: ${POSTGRES_SERVER:-aws-1-us-east-1.pooler.supabase.com}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres.vnliytzpgsdkuhbcrrku}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Blendsoft1!1}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-6543}
       
       # Redis
       REDIS_URL: "redis://redis:6379/0"
       
-      # Conexión RabbitMQ (Para enviar tareas a Franco)
+      # Conexión RabbitMQ
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
       
       # Security & Apps
       SECRET_KEY: ${SECRET_KEY:-cambiar_esto_en_prod_por_favor}
       ALGORITHM: HS256
-      BACKEND_CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://frontend:3000}
+      
+      # URLs de la aplicación
+      BASE_URL: ${BASE_URL:-http://localhost:8001}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       
       # Integraciones
       MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-test}
-      AFIP_PRODUCTION: "False"
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      AFIP_PRODUCTION: ${AFIP_PRODUCTION:-False}
+      AFIP_CUIT: ${AFIP_CUIT:-}
+      
+      # Shopify OAuth
+      SHOPIFY_CLIENT_ID: ${SHOPIFY_CLIENT_ID:-}
+      SHOPIFY_CLIENT_SECRET: ${SHOPIFY_CLIENT_SECRET:-}
+      SHOPIFY_REDIRECT_URI: ${SHOPIFY_REDIRECT_URI:-http://localhost:8001/api/v1/integrations/shopify/callback}
+      
+      # Entorno
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8001:8000"
+    volumes:
+      - ./core-api/logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - super_network
 
@@ -144,14 +167,11 @@ services:
     container_name: super_pos_worker
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
-      # Go usa Connection String directa
-      # ¡OJO! Conectamos a la misma DB 'nexus_pos' con el user 'nexuspos'
-      DB_DSN: "postgres://${POSTGRES_USER:-nexuspos}:${POSTGRES_PASSWORD:-nexuspos_secret}@db:5432/${POSTGRES_DB:-nexus_pos}?sslmode=disable"
+      # Go usa Connection String directa - Usando Supabase
+      DB_DSN: ${DB_DSN:-postgres://postgres.vnliytzpgsdkuhbcrrku:Blendsoft1!1@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require}
       RABBITMQ_URL: "amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASS:-pass}@rabbitmq:5672/"
       SENDGRID_API_KEY: ${SENDGRID_API_KEY}
       ENCRYPTION_KEY: ${SECRET_KEY} # Usamos la misma key para encriptar

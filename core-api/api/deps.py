@@ -116,6 +116,16 @@ async def get_current_active_tienda(
     return tienda
 
 
+async def get_current_user_id(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> UUID:
+    """
+    Dependencia que retorna solo el ID del usuario actual
+    Útil cuando no necesitamos el objeto User completo
+    """
+    return current_user.id
+
+
 # Aliases para uso simplificado con Annotated
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentTienda = Annotated[Tienda, Depends(get_current_active_tienda)]

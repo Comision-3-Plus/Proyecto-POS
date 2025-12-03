@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -17,9 +17,11 @@ import {
   Settings,
   ChevronLeft,
   Zap,
+  LogOut,
   LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 interface NavItem {
   label: string;
@@ -40,6 +42,13 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { logout, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <motion.aside
@@ -140,10 +149,11 @@ export default function Sidebar() {
       </nav>
 
       {/* User Footer */}
-      <div className="border-t border-gray-100 p-2.5">
+      <div className="border-t border-gray-100 p-2.5 space-y-1">
+        {/* User Info */}
         <div
           className={cn(
-            'flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-gray-50 transition-all cursor-pointer group',
+            'flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-gray-50 transition-all cursor-pointer group',
             isCollapsed && 'justify-center px-0'
           )}
         >
@@ -158,19 +168,60 @@ export default function Sidebar() {
                 transition={{ duration: 0.2 }}
                 className="flex-1 min-w-0 overflow-hidden"
               >
-                <p className="text-[11px] font-semibold text-gray-900 truncate">Admin</p>
-                <p className="text-[10px] text-gray-500 truncate">admin@nexuspos.com</p>
+                <p className="text-[11px] font-semibold text-gray-900 truncate">
+                  {user?.email || 'Admin'}
+                </p>
+                <p className="text-[10px] text-gray-500 truncate">
+                  {user?.tienda?.nombre || 'NexusPOS Store'}
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
 
           {isCollapsed && (
             <div className="absolute left-full ml-3 px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
-              Admin
+              {user?.email || 'Admin'}
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-[3px] border-transparent border-r-gray-900" />
             </div>
           )}
         </div>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 h-10 rounded-lg transition-all duration-150',
+            'text-red-600 hover:text-red-700 hover:bg-red-50',
+            isCollapsed && 'justify-center px-0'
+          )}
+        >
+          <LogOut
+            className="w-4 h-4 flex-shrink-0"
+            strokeWidth={2}
+          />
+
+          <AnimatePresence>
+            {!isCollapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.2 }}
+                className="text-sm font-semibold tracking-tight overflow-hidden whitespace-nowrap"
+              >
+                Cerrar Sesión
+              </motion.span>
+            )}
+          </AnimatePresence>
+
+          {/* Tooltip para estado colapsado */}
+          {isCollapsed && (
+            <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg opacity-0 hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              Cerrar Sesión
+              <div className="absolute right-full top-1/2 -translate-y-1/2 border-[4px] border-transparent border-r-red-600" />
+            </div>
+          )}
+        </button>
       </div>
     </motion.aside>
   );

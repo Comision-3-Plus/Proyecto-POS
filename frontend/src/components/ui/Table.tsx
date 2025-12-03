@@ -9,10 +9,11 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: string | ReactNode;
   render?: (item: T) => ReactNode;
   sortable?: boolean;
   align?: 'left' | 'center' | 'right';
+  width?: string;
 }
 
 export interface TableProps<T> {
@@ -113,7 +114,7 @@ export default function Table<T>({
                       col.align === 'right' && 'justify-end'
                     )}
                   >
-                    <span>{col.header}</span>
+                    {typeof col.header === 'string' ? <span>{col.header}</span> : col.header}
                     {col.sortable && (
                       <span className="ml-1">
                         {sortBy === col.key ? (
