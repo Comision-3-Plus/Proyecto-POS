@@ -1,25 +1,45 @@
 /**
- * Ventas / POS Screen - Doble Panel Alta Velocidad
- * Diseño optimizado para procesamiento rápido de ventas
+ * Ventas / POS Screen - Enterprise Edition
+ * Sistema de Punto de Venta de Alto Rendimiento con Checkout Profesional
+ * 
+ * @module screens/Ventas
+ * @description Pantalla principal de ventas con soporte para hotkeys y modo offline
+ * 
+ * Features:
+ * - Modal de checkout profesional con múltiples métodos de pago
+ * - Hotkeys para productividad (F5, ESC, F2, DEL)
+ * - Banner de modo offline
+ * - Búsqueda y escaneo de productos
+ * - Gestión de carrito en tiempo real
+ * 
+ * @author Tech Lead - Enterprise POS System
+ * @version 2.0.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useHotkeys } from 'react-hotkeys-hook';
 import {
   Scan,
   Plus,
   Trash2,
-  CreditCard,
-  Banknote,
   Search,
   Tag,
-  Gift,
   Download,
+  WifiOff,
+  AlertTriangle,
+  CheckCircle2,
+  ShoppingCart,
+  CreditCard,
+  Banknote,
+  Gift,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import PaymentModal, { PaymentData } from '@/components/pos/PaymentModal';
 import { useProductosQuery } from '@/hooks/useProductosQuery';
 import { useCheckout, useScanProducto } from '@/hooks/useVentasQuery';
 import { useToast } from '@/context/ToastContext';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 interface CartItem {
   variant_id: string;
@@ -31,17 +51,70 @@ interface CartItem {
 }
 
 export default function Ventas() {
+  // State Management
   const [cart, setCart] = useState<CartItem[]>([]);
   const [scanInput, setScanInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldScan, setShouldScan] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   
+  // Refs
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Hooks
   const { data: productos = [] } = useProductosQuery();
   const { data: scannedProduct, isError: scanError } = useScanProducto(scanInput, shouldScan);
   const checkoutMutation = useCheckout();
   const { error: showError, success: showSuccess } = useToast();
+  const { isOnline, wasOffline } = useNetworkStatus();
 
-  // Efecto para agregar producto escaneado al carrito
+  // ==================== HOTKEYS ====================
+  
+  /**
+   * F5: Abrir Checkout
+   */
+  useHotkeys('f5', (e) => {
+    e.preventDefault();
+    if (cart.length > 0 && !showPaymentModal) {
+      setShowPaymentModal(true);
+    }
+  }, [cart, showPaymentModal]);
+
+  /**
+   * ESC: Cancelar/Cerrar Modal
+   */
+  useHotkeys('esc', () => {
+    if (showPaymentModal) {
+      setShowPaymentModal(false);
+    }
+  }, [showPaymentModal]);
+
+  /**
+   * F2: Focus en Buscador de Productos
+   */
+  useHotkeys('f2', (e) => {
+    e.preventDefault();
+    searchInputRef.current?.focus();
+  });
+
+  /**
+   * DEL: Eliminar item seleccionado del carrito
+   */
+  useHotkeys('delete', () => {
+    if (cart.length > 0) {
+      // Eliminar último item del carrito
+      const lastItem = cart[cart.length - 1];
+      if (lastItem) {
+        eliminarDelCarrito(lastItem.variant_id);
+      }
+    }
+  }, [cart]);
+
+  // ==================== EFFECTS ====================
+  
+  /**
+   * Efecto para agregar producto escaneado al carrito
+   */
   useEffect(() => {
     if (scannedProduct && shouldScan) {
       agregarAlCarrito({
@@ -98,6 +171,58 @@ export default function Ventas() {
     setShouldScan(true);
   };
 
+  /**
+   * Maneja el checkout con datos de pago del modal
+   */
+  const handlePaymentConfirm = async (paymentData: PaymentData) => {
+    if (cart.length === 0) {
+      showError('El carrito está vacío');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:8001/api/v1/ventas-simple/checkout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: cart.map(item => ({
+            variant_id: item.variant_id,
+            cantidad: item.cantidad,
+          })),
+          metodo_pago: paymentData.metodo_pago,
+          monto_recibido: paymentData.monto_recibido,
+          monto_cambio: paymentData.monto_cambio,
+          terminal_id: paymentData.terminal_id,
+          codigo_autorizacion: paymentData.codigo_autorizacion,
+          qr_id: paymentData.qr_id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al procesar venta');
+      }
+
+      const data = await response.json();
+      
+      // Limpiar carrito y cerrar modal
+      setCart([]);
+      setShowPaymentModal(false);
+      showSuccess(`Venta #${data.id} procesada con éxito`);
+      
+    } catch (error) {
+      console.error('Error en checkout:', error);
+      showError(error instanceof Error ? error.message : 'Error al procesar venta');
+    }
+  };
+
+  /**
+   * Legacy checkout handler (deprecated - usar PaymentModal)
+   */
   const handleCheckout = async (metodo_pago: 'efectivo' | 'tarjeta_debito' | 'tarjeta_credito') => {
     if (cart.length === 0) {
       showError('El carrito está vacío');
@@ -169,6 +294,35 @@ export default function Ventas() {
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
+      
+      {/* ==================== OFFLINE BANNER ==================== */}
+      {!isOnline && (
+        <motion.div
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg"
+        >
+          <WifiOff className="w-5 h-5 text-white" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white">Modo sin conexión</p>
+            <p className="text-xs text-amber-50">Las ventas se sincronizarán automáticamente al reconectar</p>
+          </div>
+          <AlertTriangle className="w-5 h-5 text-white animate-pulse" />
+        </motion.div>
+      )}
+
+      {wasOffline && isOnline && (
+        <motion.div
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -50, opacity: 0 }}
+          className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 shadow-lg"
+        >
+          <CheckCircle2 className="w-5 h-5 text-white" />
+          <p className="text-sm font-semibold text-white">Conexión restaurada - sincronizando datos...</p>
+        </motion.div>
+      )}
+
       {/* Header Superior con Botones */}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200/50 shadow-sm">
         <div>
@@ -430,36 +584,60 @@ export default function Ventas() {
             </div>
             Aplicar Descuento / Loyalty
           </Button>
-          <div className="grid grid-cols-2 gap-3">
+          
+          {/* BOTÓN PRINCIPAL DE CHECKOUT - Abre PaymentModal */}
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full shadow-lg shadow-primary-500/40 hover:shadow-xl hover:shadow-primary-500/50"
+            disabled={cart.length === 0 || !isOnline}
+            onClick={() => setShowPaymentModal(true)}
+          >
+            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4 text-white" />
+            </div>
+            <span className="flex-1">Procesar Pago (F5)</span>
+            <span className="text-xs bg-white/20 px-2 py-1 rounded">
+              ${total.toLocaleString()}
+            </span>
+          </Button>
+          
+          {/* Botones Legacy (mantener por compatibilidad) */}
+          <div className="grid grid-cols-2 gap-3 opacity-50">
             <Button
               variant="secondary"
-              size="lg"
-              className="shadow-md hover:shadow-lg hover:shadow-emerald-500/20"
+              size="md"
+              className="shadow-md"
               disabled={cart.length === 0 || checkoutMutation.isPending}
               onClick={() => handleCheckout('efectivo')}
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/40">
-                <Banknote className="w-4 h-4 text-white" />
-              </div>
+              <Banknote className="w-4 h-4 mr-2" />
               Efectivo
             </Button>
             <Button
-              variant="primary"
-              size="lg"
-              className="shadow-lg shadow-primary-500/40 hover:shadow-xl hover:shadow-primary-500/50"
+              variant="secondary"
+              size="md"
+              className="shadow-md"
               disabled={cart.length === 0 || checkoutMutation.isPending}
-              isLoading={checkoutMutation.isPending}
               onClick={() => handleCheckout('tarjeta_credito')}
             >
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <CreditCard className="w-4 h-4 text-white" />
-              </div>
+              <CreditCard className="w-4 h-4 mr-2" />
               Tarjeta
             </Button>
           </div>
         </div>
       </div>
       </div>
+
+      {/* ==================== PAYMENT MODAL ==================== */}
+      {showPaymentModal && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onConfirm={handlePaymentConfirm}
+          total={total}
+        />
+      )}
     </div>
   );
 }

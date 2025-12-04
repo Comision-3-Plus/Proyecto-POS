@@ -3,7 +3,7 @@ Aplicación Principal - Nexus POS
 FastAPI App con configuración Multi-Tenant
 """
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware  # ⚡ OPTIMIZACIÓN: Compresión HTTP
 from fastapi.exceptions import RequestValidationError, HTTPException
@@ -14,6 +14,7 @@ from core.db import init_db
 from core.logging_config import setup_logging
 from core.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 from core.audit_middleware import AuditMiddleware
+from core.websockets import manager as ws_manager  # ⭐ WebSocket Manager
 from core.exceptions import (
     NexusPOSException,
     nexus_exception_handler,
@@ -134,3 +135,66 @@ async def root():
 async def health_check():
     """Endpoint de salud para monitoreo"""
     return {"status": "healthy"}
+
+
+# ==================== WEBSOCKET ENDPOINT ====================
+
+@app.websocket("/ws/{tienda_id}")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    tienda_id: str
+):
+    """
+    Endpoint WebSocket para notificaciones en tiempo real.
+    
+    Args:
+        websocket: Conexión WebSocket
+        tienda_id: ID de la tienda (scope de notificaciones)
+    
+    Eventos soportados:
+        - new_order: Nueva orden recibida desde webhook
+        - stock_alert: Alerta de stock bajo
+        - sale_completed: Venta procesada en POS
+        - payment_received: Pago confirmado
+    
+    Uso:
+        const ws = new WebSocket(`ws://localhost:8001/ws/TIENDA123`);
+        ws.onmessage = (event) => console.log(JSON.parse(event.data));
+    """
+    logger = logging.getLogger("websocket")
+    
+    # Conectar cliente
+    await ws_manager.connect(websocket, tienda_id)
+    
+    try:
+        # Mantener conexión activa y escuchar mensajes del cliente
+        while True:
+            data = await websocket.receive_json()
+            
+            # Echo del mensaje (opcional - para debugging)
+            if data.get("type") == "ping":
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": data.get("timestamp")
+                })
+            else:
+                logger.info(f"Received from client: {data}")
+                
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, tienda_id)
+        logger.info(f"Client disconnected: tienda_id={tienda_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        ws_manager.disconnect(websocket, tienda_id)
+
+
+@app.get("/ws/stats")
+async def websocket_stats():
+    """
+    Retorna estadísticas de conexiones WebSocket activas.
+    
+    Returns:
+        Dict con total_connections, connections_by_tienda
+    """
+    return ws_manager.get_stats()
+

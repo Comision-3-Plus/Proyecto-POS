@@ -183,6 +183,8 @@ async def shopify_webhook_handler(
     
     Returns:
     - 200 OK si se procesó exitosamente
+    
+    ⭐ NEW: Notifica via WebSocket a clientes conectados en tiempo real
     """
     body = await request.body()
     
@@ -213,6 +215,25 @@ async def shopify_webhook_handler(
     
     # Procesar webhook según topic
     logger.info(f"[SHOPIFY_WEBHOOK] Recibido {topic} de {x_shopify_shop_domain}")
+    
+    # ⭐ ENTERPRISE: Notificar via WebSocket en tiempo real
+    from core.websockets import manager as ws_manager
+    
+    tienda_id = str(integracion.tienda_id)
+    
+    # Broadcast a todos los clientes conectados de esta tienda
+    await ws_manager.send_to_tienda(
+        tienda_id=tienda_id,
+        message={
+            "type": "new_order" if topic == "orders/create" else "webhook_received",
+            "topic": topic,
+            "shop_domain": x_shopify_shop_domain,
+            "data": payload,
+            "integration_id": str(integracion.id)
+        }
+    )
+    
+    logger.info(f"[WEBSOCKET] Notificación enviada a tienda_id={tienda_id} - topic={topic}")
     
     # TODO: Implementar lógica de procesamiento según topic
     # Ejemplo: products/create → crear producto en BD

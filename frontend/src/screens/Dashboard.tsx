@@ -4,6 +4,7 @@
  */
 
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   Package,
@@ -76,6 +77,7 @@ const recentActivity = [
 
 export default function Dashboard() {
   const { data: dashboardData, isLoading, error, refetch } = useDashboardQuery();
+  const navigate = useNavigate();
 
   const handleExportar = () => {
     // Crear CSV con datos del dashboard
@@ -312,12 +314,13 @@ export default function Dashboard() {
                 {quickActions.map((action, i) => (
                   <motion.button
                     key={action.label}
+                    onClick={() => navigate(action.href)}
                     whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 + i * 0.05 }}
-                    className="group relative overflow-hidden flex flex-col items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-200/50 hover:border-primary-200 hover:shadow-lg transition-all duration-300"
+                    className="group relative overflow-hidden flex flex-col items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-200/50 hover:border-primary-200 hover:shadow-lg transition-all duration-300 cursor-pointer"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-primary-50/0 to-accent-50/0 group-hover:from-primary-50/50 group-hover:to-accent-50/30 transition-all duration-500" />
                     <div className={`relative z-10 p-3 rounded-xl ${action.color} shadow-lg group-hover:scale-110 transition-transform duration-300`}>
