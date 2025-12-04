@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Package,
   Truck,
@@ -19,50 +20,17 @@ import Button from '@/components/ui/Button';
 import { useToast } from '../hooks/useToast';
 import { ToastContainer } from '../components/common/ToastNotification';
 import ProgressBar from '../components/common/ProgressBar';
+import omsService, { OrdenOmnicanal } from '@/services/oms.service';
 
-type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-
-interface Order {
-  id: number;
-  order_number: string;
-  platform: 'shopify' | 'mercadolibre' | 'tiendanube';
-  customer: string;
-  items: number;
-  total: number;
-  status: OrderStatus;
-  created_at: string;
-  tracking?: string;
-}
-
-const mockOrders: Order[] = [
-  {
-    id: 1,
-    order_number: 'SHP-2024-001',
-    platform: 'shopify',
-    customer: 'Juan Pérez',
-    items: 3,
-    total: 45000,
-    status: 'processing',
-    created_at: '2024-01-15T10:30:00',
-  },
-  {
-    id: 2,
-    order_number: 'ML-2024-002',
-    platform: 'mercadolibre',
-    customer: 'María García',
-    items: 1,
-    total: 12500,
-    status: 'shipped',
-    created_at: '2024-01-15T09:15:00',
-    tracking: 'AR123456789',
-  },
-];
+type OrderStatus = 'pending' | 'analyzing' | 'assigned' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
 const statusConfig: Record<
   OrderStatus,
   { label: string; color: string; icon: typeof Clock }
 > = {
   pending: { label: 'Pendiente', color: 'warning', icon: Clock },
+  analyzing: { label: 'Analizando', color: 'primary', icon: Package },
+  assigned: { label: 'Asignado', color: 'info', icon: Package },
   processing: { label: 'Procesando', color: 'primary', icon: Package },
   shipped: { label: 'Enviado', color: 'info', icon: Truck },
   delivered: { label: 'Entregado', color: 'success', icon: CheckCircle },
@@ -73,6 +41,9 @@ const platformConfig = {
   shopify: { name: 'Shopify', color: 'bg-green-50 text-green-700' },
   mercadolibre: { name: 'Mercado Libre', color: 'bg-yellow-50 text-yellow-700' },
   tiendanube: { name: 'TiendaNube', color: 'bg-blue-50 text-blue-700' },
+  online: { name: 'Online', color: 'bg-purple-50 text-purple-700' },
+  pos: { name: 'POS', color: 'bg-gray-50 text-gray-700' },
+  whatsapp: { name: 'WhatsApp', color: 'bg-green-50 text-green-700' },
 };
 
 export default function OMS() {
@@ -80,6 +51,21 @@ export default function OMS() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const { toasts, removeToast, success, info } = useToast();
+
+  // Obtener órdenes reales del backend
+  const { data: ordersData, isLoading, refetch } = useQuery({
+    queryKey: ['oms-pending-orders'],
+    queryFn: () => omsService.getPendingOrders(),
+    refetchInterval: 30000, // Refetch cada 30 segundos
+  });
+
+  // Obtener analytics
+  const { data: analytics } = useQuery({
+    queryKey: ['oms-analytics'],
+    queryFn: () => omsService.getRoutingAnalytics(30),
+  });
+
+  const orders = ordersData?.ordenes || [];
 
   const handleSync = async () => {
     setSyncing(true);
@@ -92,12 +78,43 @@ export default function OMS() {
         if (prev >= 100) {
           clearInterval(interval);
           setSyncing(false);
+          refetch(); // Refrescar datos reales
           success(
             'Sincronización completada',
-            '47 órdenes actualizadas desde Shopify, Mercado Libre y TiendaNube'
+            `${orders.length} órdenes actualizadas`
           );
           return 100;
         }
+        return prev + 10;
+      });
+    }, 200);
+  };
+
+  // Filtrar órdenes
+  const filteredOrders = orders.filter((order) => {
+    if (selectedStatus === 'all') return true;
+    return order.fulfillment_status === selectedStatus;
+  });
+
+  // Calcular estadísticas
+  const stats = {
+    total: orders.length,
+    pending: orders.filter((o) => o.fulfillment_status === 'pending').length,
+    assigned: orders.filter((o) => o.fulfillment_status === 'assigned').length,
+    processing: orders.filter((o) => o.fulfillment_status === 'processing').length,
+    autoAssignment: analytics?.tasa_asignacion_auto || 0,
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Cargando órdenes...</p>
+        </div>
+      </div>
+    );
+  }
         return prev + 10;
       });
     }, 300);
@@ -287,8 +304,120 @@ export default function OMS() {
 
       {/* Orders List */}
       <div className="flex-1 px-6 pb-6 overflow-auto">
-        <div className="space-y-4">
-          {mockOrders.map((order, index) => {
+        {filteredOrders.length === 0 ? (
+          <div className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay órdenes</h3>
+            <p className="text-gray-500">
+              {selectedStatus === 'all' 
+                ? 'No se encontraron órdenes en el sistema' 
+                : `No hay órdenes con estado "${statusConfig[selectedStatus as OrderStatus]?.label}"`
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredOrders.map((order, index) => (
+              <OrderCard key={order.id} order={order} index={index} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Componente auxiliar para stats cards
+function StatsCard({ label, value, color = 'primary' }: { label: string; value: number | string; color?: string }) {
+  const colors: Record<string, string> = {
+    primary: 'from-primary-500 to-primary-600',
+    success: 'from-success-500 to-emerald-500',
+    warning: 'from-warning-500 to-amber-500',
+    info: 'from-blue-500 to-cyan-500',
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/60 hover:shadow-2xl transition-all duration-500"
+    >
+      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-3">{label}</p>
+      <p className={`text-4xl font-black bg-gradient-to-r ${colors[color]} bg-clip-text text-transparent`}>
+        {value}
+      </p>
+    </motion.div>
+  );
+}
+
+// Componente auxiliar para orden card
+function OrderCard({ order, index }: { order: OrdenOmnicanal; index: number }) {
+  const StatusIcon = statusConfig[order.fulfillment_status as OrderStatus]?.icon || Package;
+  const platform = order.plataforma || order.canal;
+  const platformInfo = platformConfig[platform as keyof typeof platformConfig] || platformConfig.online;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.08, type: 'spring' }}
+      className="relative bg-white/95 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/60 hover:shadow-2xl hover:shadow-primary-500/10 transition-all duration-500 group hover:-translate-y-1"
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/40">
+            <Package className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-gray-900 tracking-tight">
+              {order.numero_orden}
+            </h3>
+            <p className="text-xs text-gray-500 font-medium">
+              {new Date(order.created_at).toLocaleDateString('es-AR', { 
+                day: '2-digit', 
+                month: 'short', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}
+            </p>
+          </div>
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-sm ${platformInfo.color}`}>
+            <ExternalLink className="w-3 h-3" />
+            {platformInfo.name}
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary-500 to-cyan-500 shadow-lg shadow-primary-500/40">
+          <StatusIcon className="w-4 h-4 text-white" />
+          <span className="text-xs font-bold text-white uppercase tracking-wider">
+            {statusConfig[order.fulfillment_status as OrderStatus]?.label || order.fulfillment_status}
+          </span>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-6 pl-12 mt-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 font-medium">Canal:</span>
+          <span className="text-sm font-bold text-gray-900">{order.canal}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 font-medium">Total:</span>
+          <div className="px-3 py-1 rounded-lg bg-gradient-to-r from-primary-50 to-cyan-50 border border-primary-200/50">
+            <span className="text-base font-black text-primary-700">
+              ${order.total.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        {order.fulfillment_location_id && (
+          <div className="flex items-center gap-2">
+            <Truck className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-600">Ubicación asignada</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
             const StatusIcon = statusConfig[order.status].icon;
             
             // Calcular progress del fulfillment

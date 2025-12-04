@@ -74,6 +74,38 @@ async def listar_colors(
     return [ColorRead.model_validate(c) for c in colors]
 
 
+@router.get("/suggest-sku")
+async def suggest_sku(
+    product_name: str = Query(..., description="Nombre del producto para generar SKU"),
+    current_tienda: CurrentTienda = Depends(),
+    session: AsyncSession = Depends(get_session)
+) -> dict:
+    """
+    Sugiere un SKU base único para un nuevo producto
+    """
+    base_suggestion = generate_base_sku_suggestion(product_name)
+    
+    # Verificar si existe y agregar sufijo si es necesario
+    counter = 1
+    suggested_sku = base_suggestion
+    
+    while True:
+        query = select(Product).where(
+            Product.tienda_id == current_tienda.id,
+            Product.base_sku == suggested_sku
+        )
+        result = await session.execute(query)
+        if not result.scalar_one_or_none():
+            break
+        suggested_sku = f"{base_suggestion}-{counter}"
+        counter += 1
+    
+    return {
+        "suggested_sku": suggested_sku,
+        "product_name": product_name
+    }
+
+
 @router.get("/locations", response_model=List)
 async def listar_locations(
     current_tienda: CurrentTienda,
@@ -104,6 +136,27 @@ async def listar_locations(
 # =====================================================
 # HELPERS: GENERACIÓN DE SKU Y CÁLCULO DE STOCK
 # =====================================================
+
+def generate_base_sku_suggestion(product_name: str) -> str:
+    """
+    Genera una sugerencia de SKU base a partir del nombre del producto
+    Formato: Primeras letras de cada palabra + timestamp corto
+    Ejemplo: "Remera Básica Algodón" -> "RBA-2024"
+    """
+    from datetime import datetime
+    import re
+    
+    # Limpiar y obtener palabras
+    words = re.sub(r'[^a-zA-Z0-9\s]', '', product_name).upper().split()
+    
+    # Tomar primera letra de cada palabra (máx 4 palabras)
+    initials = ''.join([w[0] for w in words[:4] if w])
+    
+    # Agregar año actual para unicidad
+    year = datetime.now().year
+    
+    return f"{initials}-{year}"
+
 
 def generate_variant_sku(base_sku: str, color_name: Optional[str], size_name: Optional[str]) -> str:
     """
@@ -199,17 +252,36 @@ async def crear_producto(
        - Crea transacción INITIAL_STOCK en ledger
     3. Todo en una transacción ACID
     """
-    # Validar que base_sku no esté duplicado
-    query = select(Product).where(
-        Product.tienda_id == current_tienda.id,
-        Product.base_sku == producto_data.base_sku
-    )
-    result = await session.execute(query)
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe un producto con base_sku '{producto_data.base_sku}'"
+    # Generar base_sku si no se proveyó
+    base_sku = producto_data.base_sku
+    if not base_sku:
+        base_sku = generate_base_sku_suggestion(producto_data.name)
+        # Asegurar unicidad
+        counter = 1
+        temp_sku = base_sku
+        while True:
+            query = select(Product).where(
+                Product.tienda_id == current_tienda.id,
+                Product.base_sku == temp_sku
+            )
+            result = await session.execute(query)
+            if not result.scalar_one_or_none():
+                base_sku = temp_sku
+                break
+            temp_sku = f"{base_sku}-{counter}"
+            counter += 1
+    else:
+        # Validar que base_sku no esté duplicado
+        query = select(Product).where(
+            Product.tienda_id == current_tienda.id,
+            Product.base_sku == base_sku
         )
+        result = await session.execute(query)
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ya existe un producto con base_sku '{base_sku}'"
+            )
     
     # Obtener ubicación default de la tienda
     default_location_query = select(Location).where(
@@ -230,7 +302,7 @@ async def crear_producto(
         nuevo_producto = Product(
             tienda_id=current_tienda.id,
             name=producto_data.name,
-            base_sku=producto_data.base_sku,
+            base_sku=base_sku,
             description=producto_data.description,
             category=producto_data.category,
             is_active=True
@@ -278,7 +350,7 @@ async def crear_producto(
                     )
             
             # Generar SKU único
-            variant_sku = generate_variant_sku(producto_data.base_sku, color_name, size_name)
+            variant_sku = generate_variant_sku(base_sku, color_name, size_name)
             
             # Validar SKU único
             sku_check = select(ProductVariant).where(

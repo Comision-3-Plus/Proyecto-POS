@@ -3,20 +3,22 @@
  * Formulario completo con variantes (talle/color)
  */
 
-import { X, Plus, Trash2, Save } from 'lucide-react';
+import { X, Plus, Trash2, Save, Sparkles } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import { useSizesQuery, useColorsQuery, useLocationsQuery, useCreateProducto } from '@/hooks/useProductosQuery';
+import { productosService } from '@/services/productos.service';
 import type { CreateProductRequest } from '@/types/api';
 
 // Schema de validación
 const createProductSchema = z.object({
   name: z.string().min(3, 'Nombre debe tener al menos 3 caracteres'),
-  base_sku: z.string().min(2, 'SKU requerido'),
+  base_sku: z.string().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
   variants: z.array(
@@ -43,6 +45,8 @@ export default function CreateProductModal({ isOpen, onClose }: CreateProductMod
   const { data: colors = [], isLoading: loadingColors } = useColorsQuery();
   const { data: locations = [], isLoading: loadingLocations } = useLocationsQuery();
   const createProductMutation = useCreateProducto();
+  const [suggestedSku, setSuggestedSku] = useState<string>('');
+  const [loadingSku, setLoadingSku] = useState(false);
 
   const {
     register,
@@ -50,6 +54,8 @@ export default function CreateProductModal({ isOpen, onClose }: CreateProductMod
     control,
     formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<CreateProductForm>({
     resolver: zodResolver(createProductSchema),
     defaultValues: {
@@ -69,6 +75,34 @@ export default function CreateProductModal({ isOpen, onClose }: CreateProductMod
       ],
     },
   });
+
+  const productName = watch('name');
+  const baseSku = watch('base_sku');
+
+  // Generar sugerencia de SKU cuando cambia el nombre
+  useEffect(() => {
+    const generateSkuSuggestion = async () => {
+      if (productName && productName.length >= 3 && !baseSku) {
+        setLoadingSku(true);
+        try {
+          const response = await productosService.suggestSku(productName);
+          setSuggestedSku(response.suggested_sku);
+        } catch (error) {
+          console.error('Error generando SKU:', error);
+        } finally {
+          setLoadingSku(false);
+        }
+      }
+    };
+
+    const debounce = setTimeout(generateSkuSuggestion, 500);
+    return () => clearTimeout(debounce);
+  }, [productName, baseSku]);
+
+  const handleUseSuggestion = () => {
+    setValue('base_sku', suggestedSku);
+    setSuggestedSku('');
+  };
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -135,12 +169,31 @@ export default function CreateProductModal({ isOpen, onClose }: CreateProductMod
               />
             </div>
             <div>
-              <Input
-                {...register('base_sku')}
-                label="SKU Base"
-                placeholder="Ej: REM-BAS"
-                error={errors.base_sku?.message}
-              />
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Input
+                    {...register('base_sku')}
+                    label="SKU Base"
+                    placeholder={loadingSku ? "Generando..." : "Ej: REM-BAS (opcional)"}
+                    error={errors.base_sku?.message}
+                  />
+                </div>
+                {suggestedSku && !baseSku && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleUseSuggestion}
+                    className="mb-0"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Usar: {suggestedSku}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Se generará automáticamente si no lo ingresas
+              </p>
             </div>
           </div>
 

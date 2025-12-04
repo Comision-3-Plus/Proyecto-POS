@@ -109,7 +109,7 @@ class ProductCreate(BaseModel):
     Breaking change: ya no acepta JSONB, requiere variantes estructuradas
     """
     name: str = Field(..., min_length=1, max_length=255, description="Nombre del producto")
-    base_sku: str = Field(..., min_length=1, max_length=50, description="SKU base (sin variante)")
+    base_sku: Optional[str] = Field(None, min_length=1, max_length=50, description="SKU base (se genera automáticamente si no se provee)")
     description: Optional[str] = Field(None, description="Descripción detallada")
     category: Optional[str] = Field(None, max_length=100, description="Categoría")
     variants: List[ProductVariantCreate] = Field(..., min_length=1, description="Lista de variantes (mínimo 1)")
@@ -122,6 +122,8 @@ class ProductCreate(BaseModel):
     
     @field_validator('base_sku')
     def validate_sku(cls, v):
+        if v is None:
+            return v
         # SKU solo alfanuméricos y guiones
         if not v.replace('-', '').replace('_', '').isalnum():
             raise ValueError('SKU solo puede contener letras, números, guiones y guiones bajos')

@@ -19,6 +19,13 @@ import OMS from './screens/OMS';
 import Reportes from './screens/Reportes';
 import Clientes from './screens/Clientes';
 import Configuracion from './screens/Configuracion';
+import Empleados from './screens/Empleados';
+import Compras from './screens/Compras';
+import Analytics from './screens/Analytics';
+import Insights from './screens/Insights';
+import Inventario from './screens/Inventario';
+import AFIP from './screens/AFIP';
+import Integraciones from './screens/Integraciones';
 
 // Configuración de React Query
 const queryClient = new QueryClient({
@@ -166,6 +173,76 @@ export default function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <Configuracion />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/empleados"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Empleados />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/compras"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Compras />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/analytics"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Analytics />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/insights"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Insights />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/inventario"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Inventario />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/afip"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <AFIP />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/integraciones"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Integraciones />
                     </MainLayout>
                   </ProtectedRoute>
                 }

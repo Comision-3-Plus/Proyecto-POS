@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from core.db import get_session
 from api.deps import CurrentUser, CurrentTienda
-from models import Product, ProductVariant, InventoryLedger, User, Tienda
+from models import Product, ProductVariant, InventoryLedger, User, Tienda, Location
 from pydantic import BaseModel
 
 
@@ -67,6 +67,21 @@ async def procesar_venta_simple(
             detail="La venta debe tener al menos un item"
         )
     
+    # Obtener ubicación default de la tienda
+    location_result = await session.execute(
+        select(Location).where(
+            Location.tienda_id == current_tienda.id,
+            Location.is_default == True
+        )
+    )
+    default_location = location_result.scalar_one_or_none()
+    
+    if not default_location:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se encontró ubicación default para la tienda"
+        )
+    
     items_procesados = []
     total_venta = Decimal("0")
     
@@ -75,9 +90,9 @@ async def procesar_venta_simple(
         # Obtener variante y producto
         result = await session.execute(
             select(ProductVariant, Product)
-            .join(Product, ProductVariant.product_id == Product.id)
+            .join(Product, ProductVariant.product_id == Product.product_id)
             .where(
-                ProductVariant.id == item.variant_id,
+                ProductVariant.variant_id == item.variant_id,
                 Product.tienda_id == current_tienda.id
             )
         )
@@ -94,7 +109,7 @@ async def procesar_venta_simple(
         # Verificar stock actual
         stock_result = await session.execute(
             select(func.sum(InventoryLedger.delta))
-            .where(InventoryLedger.variant_id == variant.id)
+            .where(InventoryLedger.variant_id == variant.variant_id)
         )
         stock_actual = stock_result.scalar() or 0
         
@@ -112,18 +127,21 @@ async def procesar_venta_simple(
         
         # Registrar salida de inventario (delta negativo)
         ledger_entry = InventoryLedger(
-            variant_id=variant.id,
+            variant_id=variant.variant_id,
             delta=-item.cantidad,
-            reason="sale",
+            transaction_type="SALE",
+            reference_doc=None,
             notes=f"Venta - {venta_data.metodo_pago}",
-            user_id=current_user.id
+            created_by=current_user.id,
+            tienda_id=current_tienda.id,
+            location_id=default_location.location_id
         )
         session.add(ledger_entry)
         
         items_procesados.append(VentaItemResponse(
-            variant_id=variant.id,
+            variant_id=variant.variant_id,
             producto_nombre=product.name,
-            variant_name=variant.name or "Principal",
+            variant_name=f"{variant.sku}",
             cantidad=item.cantidad,
             precio_unitario=float(precio),
             subtotal=float(subtotal)
@@ -147,7 +165,7 @@ async def obtener_historial_ventas(
     limit: int = 50
 ):
     """
-    Obtiene historial de ventas (movimientos de inventario tipo 'sale')
+    Obtiene historial de ventas (movimientos de inventario tipo 'SALE')
     """
     result = await session.execute(
         select(
@@ -155,23 +173,23 @@ async def obtener_historial_ventas(
             ProductVariant,
             Product
         )
-        .join(ProductVariant, InventoryLedger.variant_id == ProductVariant.id)
-        .join(Product, ProductVariant.product_id == Product.id)
+        .join(ProductVariant, InventoryLedger.variant_id == ProductVariant.variant_id)
+        .join(Product, ProductVariant.product_id == Product.product_id)
         .where(
-            InventoryLedger.reason == "sale",
+            InventoryLedger.transaction_type == "SALE",
             Product.tienda_id == current_tienda.id
         )
-        .order_by(InventoryLedger.timestamp.desc())
+        .order_by(InventoryLedger.occurred_at.desc())
         .limit(limit)
     )
     
     ventas = []
     for ledger, variant, product in result.all():
         ventas.append({
-            "id": str(ledger.id),
-            "fecha": ledger.timestamp.isoformat(),
+            "id": str(ledger.transaction_id),
+            "fecha": ledger.occurred_at.isoformat(),
             "producto": product.name,
-            "variante": variant.name or "Principal",
+            "variante": variant.sku,
             "cantidad": abs(ledger.delta),
             "precio_unitario": float(variant.price),
             "total": float(variant.price * abs(ledger.delta)),

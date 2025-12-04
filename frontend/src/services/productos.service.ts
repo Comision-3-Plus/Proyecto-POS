@@ -73,4 +73,15 @@ export const productosService = {
     const response = await apiClient.get<Location[]>(`${BASE_PATH}locations`);
     return response.data;
   },
+
+  /**
+   * Sugiere un SKU único basado en el nombre del producto
+   */
+  async suggestSku(productName: string): Promise<{ suggested_sku: string; product_name: string }> {
+    const response = await apiClient.get<{ suggested_sku: string; product_name: string }>(
+      `${BASE_PATH}suggest-sku`,
+      { params: { product_name: productName } }
+    );
+    return response.data;
+  },
 };

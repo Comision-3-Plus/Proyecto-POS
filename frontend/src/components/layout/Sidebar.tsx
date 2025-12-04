@@ -20,6 +20,13 @@ import {
   Zap,
   LogOut,
   LucideIcon,
+  UserCog,
+  ShoppingBasket,
+  TrendingUp,
+  Lightbulb,
+  PackageSearch,
+  FileCheck,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -35,10 +42,17 @@ const navItems: NavItem[] = [
   { label: 'Ventas / POS', icon: ShoppingCart, path: '/ventas' },
   { label: 'Productos', icon: Package2, path: '/productos' },
   { label: 'Stock', icon: Warehouse, path: '/stock' },
+  { label: 'Inventario', icon: PackageSearch, path: '/inventario' },
+  { label: 'Compras', icon: ShoppingBasket, path: '/compras' },
   { label: 'Caja', icon: DollarSign, path: '/caja' },
   { label: 'OMS', icon: ShoppingBag, path: '/oms' },
   { label: 'Reportes', icon: BarChart3, path: '/reportes' },
+  { label: 'Analytics', icon: TrendingUp, path: '/analytics' },
+  { label: 'Insights', icon: Lightbulb, path: '/insights' },
   { label: 'Clientes', icon: Users2, path: '/clientes' },
+  { label: 'Empleados', icon: UserCog, path: '/empleados' },
+  { label: 'AFIP', icon: FileCheck, path: '/afip' },
+  { label: 'Integraciones', icon: Plug, path: '/integraciones' },
   { label: 'Configuración', icon: Settings, path: '/configuracion' },
 ];
 
