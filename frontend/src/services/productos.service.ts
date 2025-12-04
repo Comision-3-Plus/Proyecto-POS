@@ -85,3 +85,5 @@ export const productosService = {
     return response.data;
   },
 };
+
+export default productosService;

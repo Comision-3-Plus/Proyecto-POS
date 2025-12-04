@@ -76,9 +76,9 @@ async def listar_colors(
 
 @router.get("/suggest-sku")
 async def suggest_sku(
-    product_name: str = Query(..., description="Nombre del producto para generar SKU"),
-    current_tienda: CurrentTienda = Depends(),
-    session: AsyncSession = Depends(get_session)
+    current_tienda: CurrentTienda,
+    session: AsyncSession = Depends(get_session),
+    product_name: str = Query(..., description="Nombre del producto para generar SKU")
 ) -> dict:
     """
     Sugiere un SKU base único para un nuevo producto

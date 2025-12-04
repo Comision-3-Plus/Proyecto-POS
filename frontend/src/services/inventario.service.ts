@@ -48,6 +48,36 @@ class InventarioService {
   }
 
   /**
+   * Registrar ajuste de inventario (alias para compatibilidad)
+   */
+  async registrarAjuste(data: any) {
+    return this.ajustarStock(data);
+  }
+
+  /**
+   * Obtener niveles de stock
+   */
+  async getStockLevels() {
+    const response = await apiClient.get('/inventario/stock-levels');
+    return response.data;
+  }
+
+  /**
+   * Obtener movimientos de inventario
+   */
+  async getMovements(params?: { limit?: number }) {
+    const response = await apiClient.get('/inventario/movements', { params });
+    return response.data;
+  }
+
+  /**
+   * Obtener alertas de stock bajo (alias)
+   */
+  async getLowStockAlerts() {
+    return this.getAlertasStockBajo();
+  }
+
+  /**
    * Obtener alertas de productos con stock bajo
    */
   async getAlertasStockBajo() {

@@ -77,6 +77,30 @@ const recentActivity = [
 export default function Dashboard() {
   const { data: dashboardData, isLoading, error, refetch } = useDashboardQuery();
 
+  const handleExportar = () => {
+    // Crear CSV con datos del dashboard
+    const csvData = [
+      ['Métrica', 'Valor'],
+      ['Ventas del Día', `$${dashboardData?.ventas.hoy || 0}`],
+      ['Ventas de Ayer', `$${dashboardData?.ventas.ayer || 0}`],
+      ['Transacciones', dashboardData?.ventas.tickets_emitidos || 0],
+      ['Productos Activos', dashboardData?.inventario.productos_activos || 0],
+      ['Productos Bajo Stock', dashboardData?.inventario.productos_bajo_stock || 0],
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dashboard-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleNuevaVenta = () => {
+    window.location.href = '/ventas';
+  };
+
   // Mostrar spinner mientras carga
   if (isLoading) {
     return (
@@ -170,11 +194,11 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm">
+              <Button variant="secondary" size="sm" onClick={handleExportar}>
                 <Download className="w-3.5 h-3.5" />
                 Exportar
               </Button>
-              <Button variant="primary" size="sm">
+              <Button variant="primary" size="sm" onClick={handleNuevaVenta}>
                 <Plus className="w-3.5 h-3.5" />
                 Nueva Venta
               </Button>

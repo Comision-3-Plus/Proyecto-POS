@@ -71,3 +71,5 @@ export const ventasService = {
     return response.data;
   },
 };
+
+export default ventasService;

@@ -97,13 +97,12 @@ export default function OMS() {
   });
 
   // Calcular estadísticas
-  const stats = {
-    total: orders.length,
-    pending: orders.filter((o) => o.fulfillment_status === 'pending').length,
-    assigned: orders.filter((o) => o.fulfillment_status === 'assigned').length,
-    processing: orders.filter((o) => o.fulfillment_status === 'processing').length,
-    autoAssignment: analytics?.tasa_asignacion_auto || 0,
-  };
+  const stats = [
+    { label: 'Total Órdenes', value: orders.length.toString(), change: '+12%', trend: 'up' as const },
+    { label: 'Pendientes', value: orders.filter((o) => o.fulfillment_status === 'pending').length.toString(), change: '+5', trend: 'up' as const },
+    { label: 'Procesando', value: orders.filter((o) => o.fulfillment_status === 'processing').length.toString(), change: '-3', trend: 'down' as const },
+    { label: 'Asignación Auto', value: `${Math.round(analytics?.tasa_asignacion_auto || 0)}%`, change: '+8%', trend: 'up' as const },
+  ];
 
   if (isLoading) {
     return (
@@ -115,17 +114,6 @@ export default function OMS() {
       </div>
     );
   }
-        return prev + 10;
-      });
-    }, 300);
-  };
-
-  const stats = [
-    { label: 'Órdenes Hoy', value: '47', change: '+12%', trend: 'up' as const },
-    { label: 'En Proceso', value: '23', change: '+5', trend: 'up' as const },
-    { label: 'Enviadas', value: '18', change: '-3', trend: 'down' as const },
-    { label: 'Entregadas', value: '156', change: '+28', trend: 'up' as const },
-  ];
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
@@ -274,11 +262,11 @@ export default function OMS() {
                 : 'bg-white/90 text-gray-600 hover:bg-gray-50 border border-gray-200/80 hover:border-gray-300/80 shadow-sm hover:shadow-md'
             }`}
           >
-            Todas <span className="ml-1.5 px-2 py-0.5 rounded-full bg-white/20 text-xs">{mockOrders.length}</span>
+            Todas <span className="ml-1.5 px-2 py-0.5 rounded-full bg-white/20 text-xs">{orders.length}</span>
           </motion.button>
           {Object.entries(statusConfig).map(([status, config]) => {
             const Icon = config.icon;
-            const count = mockOrders.filter(o => o.status === status).length;
+            const count = orders.filter(o => o.fulfillment_status === status).length;
             return (
               <motion.button
                 key={status}
@@ -324,29 +312,6 @@ export default function OMS() {
         )}
       </div>
     </div>
-  );
-}
-
-// Componente auxiliar para stats cards
-function StatsCard({ label, value, color = 'primary' }: { label: string; value: number | string; color?: string }) {
-  const colors: Record<string, string> = {
-    primary: 'from-primary-500 to-primary-600',
-    success: 'from-success-500 to-emerald-500',
-    warning: 'from-warning-500 to-amber-500',
-    info: 'from-blue-500 to-cyan-500',
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/60 hover:shadow-2xl transition-all duration-500"
-    >
-      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-3">{label}</p>
-      <p className={`text-4xl font-black bg-gradient-to-r ${colors[color]} bg-clip-text text-transparent`}>
-        {value}
-      </p>
-    </motion.div>
   );
 }
 
@@ -416,180 +381,5 @@ function OrderCard({ order, index }: { order: OrdenOmnicanal; index: number }) {
         )}
       </div>
     </motion.div>
-  );
-}
-            const StatusIcon = statusConfig[order.status].icon;
-            
-            // Calcular progress del fulfillment
-            const statusProgress: Record<OrderStatus, number> = {
-              pending: 20,
-              processing: 40,
-              shipped: 70,
-              delivered: 100,
-              cancelled: 0
-            };
-            const progress = statusProgress[order.status];
-
-            return (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.08, type: 'spring' }}
-                className="relative bg-white/95 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/60 hover:shadow-2xl hover:shadow-primary-500/10 transition-all duration-500 group hover:-translate-y-1 overflow-hidden"
-              >
-                {/* Top gradient bar */}
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-500 via-cyan-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                
-                <div className="space-y-4">
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      {/* Order number con badge premium */}
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/40">
-                          <Package className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-black text-gray-900 tracking-tight">
-                            {order.order_number}
-                          </h3>
-                          <p className="text-xs text-gray-500 font-medium">
-                            {new Date(order.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* Platform badge con icono */}
-                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-sm ${
-                        order.platform === 'shopify' ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200/50' :
-                        order.platform === 'mercadolibre' ? 'bg-gradient-to-r from-yellow-50 to-amber-50 text-yellow-700 border-yellow-200/50' :
-                        'bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-blue-200/50'
-                      }`}>
-                        <ExternalLink className="w-3 h-3" />
-                        {platformConfig[order.platform].name}
-                      </div>
-                    </div>
-                    
-                    {/* Status badge */}
-                    <div className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r shadow-lg ${
-                      order.status === 'pending' ? 'from-warning-500 to-amber-500 shadow-warning-500/40' :
-                      order.status === 'processing' ? 'from-primary-500 to-cyan-500 shadow-primary-500/40' :
-                      order.status === 'shipped' ? 'from-blue-500 to-indigo-500 shadow-blue-500/40' :
-                      order.status === 'delivered' ? 'from-success-500 to-emerald-500 shadow-success-500/40' :
-                      'from-danger-500 to-rose-500 shadow-danger-500/40'
-                    }`}>
-                      <StatusIcon className="w-4 h-4 text-white" />
-                      <span className="text-xs font-bold text-white uppercase tracking-wider">
-                        {statusConfig[order.status].label}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Order details */}
-                  <div className="flex items-center gap-6 pl-12">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 font-medium">Cliente:</span>
-                      <span className="text-sm font-bold text-gray-900">{order.customer}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 font-medium">Items:</span>
-                      <div className="px-2.5 py-1 rounded-lg bg-gray-100 border border-gray-200">
-                        <span className="text-sm font-black text-gray-900">{order.items}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 font-medium">Total:</span>
-                      <div className="px-3 py-1 rounded-lg bg-gradient-to-r from-primary-50 to-cyan-50 border border-primary-200/50">
-                        <span className="text-base font-black text-primary-700">
-                          ${order.total.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                    {order.tracking && (
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-3.5 h-3.5 text-gray-400" />
-                        <code className="text-xs bg-gray-900 text-white px-3 py-1 rounded-lg font-mono font-bold shadow-sm">
-                          {order.tracking}
-                        </code>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Progress bar de fulfillment */}
-                  {order.status !== 'cancelled' && (
-                    <div className="pl-12 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-500 font-medium">Progreso de fulfillment</span>
-                        <span className="font-bold text-gray-900">{progress}%</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${progress}%` }}
-                          transition={{ duration: 1, delay: index * 0.1 }}
-                          className={`h-full bg-gradient-to-r rounded-full shadow-sm ${
-                            order.status === 'delivered' ? 'from-success-500 to-emerald-500' :
-                            order.status === 'shipped' ? 'from-blue-500 to-indigo-500' :
-                            'from-primary-500 to-cyan-500'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Timeline horizontal de estados */}
-                  <div className="pl-12 pt-2">
-                    <div className="flex items-center gap-3">
-                      {['pending', 'processing', 'shipped', 'delivered'].map((step, idx) => {
-                        const isCompleted = statusProgress[order.status] >= statusProgress[step as OrderStatus];
-                        const isCurrent = order.status === step;
-                        const StepIcon = statusConfig[step as OrderStatus].icon;
-                        
-                        return (
-                          <div key={step} className="flex items-center gap-3">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
-                                isCompleted 
-                                  ? 'bg-gradient-to-br from-success-500 to-emerald-500 shadow-lg shadow-success-500/40 scale-110' 
-                                  : isCurrent
-                                  ? 'bg-gradient-to-br from-primary-500 to-cyan-500 shadow-lg shadow-primary-500/40 animate-pulse'
-                                  : 'bg-gray-200 border-2 border-gray-300'
-                              }`}>
-                                <StepIcon className={`w-3.5 h-3.5 ${
-                                  isCompleted || isCurrent ? 'text-white' : 'text-gray-400'
-                                }`} />
-                              </div>
-                              <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                                isCompleted ? 'text-success-600' : isCurrent ? 'text-primary-600' : 'text-gray-400'
-                              }`}>
-                                {statusConfig[step as OrderStatus].label}
-                              </span>
-                            </div>
-                            {idx < 3 && (
-                              <div className={`w-12 h-0.5 transition-all duration-500 ${
-                                isCompleted ? 'bg-gradient-to-r from-success-500 to-emerald-500' : 'bg-gray-200'
-                              }`} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Hover action button */}
-                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                  <Button variant="primary" size="sm" className="shadow-lg shadow-primary-500/40">
-                    Ver Detalles
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
   );
 }

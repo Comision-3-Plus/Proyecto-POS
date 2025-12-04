@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ShoppingBag,
   Plus,
@@ -21,13 +21,11 @@ import Tabs from '@/components/ui/Tabs';
 import Table, { Column } from '@/components/ui/Table';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/context/ToastContext';
 import comprasService, {
   Proveedor,
   OrdenCompra,
   ProveedorCreate,
-  OrdenCompraCreate,
 } from '@/services/compras.service';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatCurrency, formatDate } from '@/lib/format';
@@ -35,7 +33,6 @@ import { formatCurrency, formatDate } from '@/lib/format';
 export default function Compras() {
   const [activeTab, setActiveTab] = useState<'proveedores' | 'ordenes'>('proveedores');
   const [showProveedorModal, setShowProveedorModal] = useState(false);
-  const [showOrdenModal, setShowOrdenModal] = useState(false);
   const [selectedOrden, setSelectedOrden] = useState<OrdenCompra | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -236,7 +233,7 @@ export default function Compras() {
           onClick={() =>
             activeTab === 'proveedores'
               ? setShowProveedorModal(true)
-              : setShowOrdenModal(true)
+              : null
           }
           size="lg"
         >
@@ -286,12 +283,15 @@ export default function Compras() {
 
         {/* Search */}
         <div className="p-6 border-b border-gray-200">
-          <Input
-            icon={Search}
-            placeholder={`Buscar ${activeTab === 'proveedores' ? 'proveedores' : 'órdenes'}...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder={`Buscar ${activeTab === 'proveedores' ? 'proveedores' : 'órdenes'}...`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
         </div>
 
         {/* Content */}
@@ -300,6 +300,7 @@ export default function Compras() {
             <Table
               data={filteredProveedores}
               columns={proveedoresColumns}
+              keyExtractor={(p) => p.id}
               isLoading={loadingProveedores}
               emptyMessage="No hay proveedores registrados"
             />
@@ -307,6 +308,7 @@ export default function Compras() {
             <Table
               data={filteredOrdenes}
               columns={ordenesColumns}
+              keyExtractor={(o) => o.id}
               isLoading={loadingOrdenes}
               emptyMessage="No hay órdenes de compra"
             />
@@ -424,7 +426,7 @@ function CreateProveedorModal({
         />
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
             Cancelar
           </Button>
           <Button type="submit" disabled={isLoading} className="flex-1">
@@ -516,7 +518,7 @@ function OrdenDetalleModal({
         )}
 
         <div className="pt-4">
-          <Button variant="outline" onClick={onClose} className="w-full">
+          <Button variant="secondary" onClick={onClose} className="w-full">
             Cerrar
           </Button>
         </div>

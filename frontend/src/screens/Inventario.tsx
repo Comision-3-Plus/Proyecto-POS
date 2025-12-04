@@ -3,17 +3,45 @@
  */
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Package, Plus, Minus, ArrowRightLeft, AlertCircle } from 'lucide-react';
+import { Package, Plus, Minus, AlertCircle } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Table, { Column } from '@/components/ui/Table';
 import Modal from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/context/ToastContext';
-import inventarioService, { InventoryMovement, StockLevel } from '@/services/inventario.service';
+import inventarioService from '@/services/inventario.service';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '@/lib/format';
+
+// Types
+interface StockLevel {
+  id: string;
+  producto_nombre?: string;
+  product_name?: string;
+  sku: string;
+  stock_actual?: number;
+  quantity?: number;
+  stock_minimo?: number;
+  min_stock?: number;
+  location_name?: string;
+  variant_id?: string;
+  location_id?: string;
+}
+
+interface InventoryMovement {
+  id: string;
+  tipo_movimiento?: string;
+  transaction_type?: string;
+  cantidad?: number;
+  quantity?: number;
+  fecha?: string;
+  occurred_at?: string;
+  motivo?: string;
+  reason?: string;
+  product_name?: string;
+  location_name?: string;
+}
 
 export default function Inventario() {
   const [showAjusteModal, setShowAjusteModal] = useState(false);
@@ -50,19 +78,23 @@ export default function Inventario() {
   });
 
   const stockColumns: Column<StockLevel>[] = [
-    { key: 'product_name', header: 'Producto' },
+    { key: 'product_name', header: 'Producto', render: (item) => item.product_name || item.producto_nombre || '-' },
     { key: 'sku', header: 'SKU' },
-    { key: 'location_name', header: 'Ubicación' },
+    { key: 'location_name', header: 'Ubicación', render: (item) => item.location_name || '-' },
     {
       key: 'quantity',
       header: 'Stock',
-      render: (item) => (
-        <span className={item.quantity <= (item.min_stock || 0) ? 'text-red-600 font-bold' : ''}>
-          {item.quantity}
-        </span>
-      ),
+      render: (item) => {
+        const qty = item.quantity ?? item.stock_actual ?? 0;
+        const minStock = item.min_stock ?? item.stock_minimo ?? 0;
+        return (
+          <span className={qty <= minStock ? 'text-red-600 font-bold' : ''}>
+            {qty}
+          </span>
+        );
+      },
     },
-    { key: 'min_stock', header: 'Stock Mín' },
+    { key: 'min_stock', header: 'Stock Mín', render: (item) => item.min_stock ?? item.stock_minimo ?? 0 },
     {
       key: 'actions',
       header: 'Acciones',
@@ -81,12 +113,15 @@ export default function Inventario() {
   ];
 
   const movementsColumns: Column<InventoryMovement>[] = [
-    { key: 'occurred_at', header: 'Fecha', render: (m) => formatDate(m.occurred_at) },
-    { key: 'transaction_type', header: 'Tipo' },
-    { key: 'product_name', header: 'Producto' },
-    { key: 'quantity', header: 'Cantidad', render: (m) => (m.quantity > 0 ? `+${m.quantity}` : m.quantity) },
-    { key: 'location_name', header: 'Ubicación' },
-    { key: 'reason', header: 'Motivo' },
+    { key: 'occurred_at', header: 'Fecha', render: (m) => formatDate(m.occurred_at || m.fecha || '') },
+    { key: 'transaction_type', header: 'Tipo', render: (m) => m.transaction_type || m.tipo_movimiento || '-' },
+    { key: 'product_name', header: 'Producto', render: (m) => m.product_name || '-' },
+    { key: 'quantity', header: 'Cantidad', render: (m) => {
+      const qty = m.quantity ?? m.cantidad ?? 0;
+      return qty > 0 ? `+${qty}` : qty;
+    } },
+    { key: 'location_name', header: 'Ubicación', render: (m) => m.location_name || '-' },
+    { key: 'reason', header: 'Motivo', render: (m) => m.reason || m.motivo || '-' },
   ];
 
   return (

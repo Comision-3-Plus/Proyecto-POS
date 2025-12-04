@@ -4,15 +4,12 @@
  */
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Users,
   UserPlus,
-  Mail,
   Shield,
-  MoreVertical,
   Search,
-  Filter,
   Trash2,
   RefreshCw,
   Edit,
@@ -295,12 +292,13 @@ export default function Empleados() {
       {/* Filters */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
-              icon={Search}
               placeholder="Buscar por nombre o email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
             />
           </div>
           <Select
@@ -327,6 +325,7 @@ export default function Empleados() {
         <Table
           data={filteredEmpleados}
           columns={columns}
+          keyExtractor={(u) => u.id}
           isLoading={isLoading}
           emptyMessage="No hay empleados registrados"
         />
@@ -395,7 +394,6 @@ function InviteEmployeeModal({
         <Input
           label="Email"
           type="email"
-          icon={Mail}
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           required
@@ -420,7 +418,7 @@ function InviteEmployeeModal({
         </Select>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
             Cancelar
           </Button>
           <Button type="submit" disabled={isLoading} className="flex-1">
@@ -467,7 +465,7 @@ function EditRolModal({
         <Select
           label="Nuevo Rol"
           value={selectedRol}
-          onChange={(e) => setSelectedRol(e.target.value)}
+          onChange={(e) => setSelectedRol(e.target.value as any)}
         >
           <option value="cajero">Cajero</option>
           <option value="vendedor">Vendedor</option>
@@ -476,7 +474,7 @@ function EditRolModal({
         </Select>
 
         <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
             Cancelar
           </Button>
           <Button type="submit" disabled={isLoading} className="flex-1">

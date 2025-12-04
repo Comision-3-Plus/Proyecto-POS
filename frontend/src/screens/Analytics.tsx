@@ -13,9 +13,7 @@ import {
   ShoppingBag,
   AlertTriangle,
   BarChart3,
-  PieChart,
 } from 'lucide-react';
-import Button from '@/components/ui/Button';
 import Tabs from '@/components/ui/Tabs';
 import { Alert } from '@/components/ui/Alert';
 import analyticsService from '@/services/analytics.service';

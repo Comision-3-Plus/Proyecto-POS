@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - NexusPOS</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 { color: #667eea; margin-bottom: 30px; }
+        .test-group { margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+        .test-title { font-weight: 600; margin-bottom: 15px; color: #333; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover { background: #5568d3; transform: translateY(-2px); }
+        .result { 
+            margin-top: 15px; 
+            padding: 15px; 
+            border-radius: 6px; 
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        pre { font-size: 12px; margin-top: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 NexusPOS - Test de Conectividad</h1>
+        
+        <div class="test-group">
+            <div class="test-title">1. Test de Backend</div>
+            <button onclick="testHealth()">Probar /health</button>
+            <button onclick="testLogin()">Probar Login</button>
+            <div id="backend-result"></div>
+        </div>
+
+        <div class="test-group">
+            <div class="test-title">2. Test de Endpoints Protegidos</div>
+            <button onclick="testDashboard()">Probar Dashboard</button>
+            <button onclick="testProductos()">Probar Productos</button>
+            <div id="protected-result"></div>
+        </div>
+
+        <div class="test-group">
+            <div class="test-title">3. Test de Frontend</div>
+            <button onclick="window.location.href='/'">Ir al Dashboard</button>
+            <button onclick="window.location.href='/ventas'">Ir a Ventas</button>
+            <button onclick="window.location.href='/productos'">Ir a Productos</button>
+            <div id="frontend-result"></div>
+        </div>
+
+        <div class="test-group">
+            <div class="test-title">4. Información del Sistema</div>
+            <button onclick="showSystemInfo()">Mostrar Info</button>
+            <div id="system-info"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8001';
+        let token = localStorage.getItem('access_token');
+
+        function showResult(elementId, message, type = 'info') {
+            const el = document.getElementById(elementId);
+            el.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+
+        async function testHealth() {
+            showResult('backend-result', '⏳ Probando...', 'loading');
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                showResult('backend-result', `✅ Backend funcionando!\n\nRespuesta: ${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                showResult('backend-result', `❌ Error: ${error.message}\n\nVerifica que el backend esté corriendo en ${API_URL}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            showResult('backend-result', '⏳ Iniciando sesión...', 'loading');
+            try {
+                const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@nexuspos.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                token = data.access_token;
+                localStorage.setItem('access_token', token);
+                
+                showResult('backend-result', `✅ Login exitoso!\n\nToken guardado en localStorage\nUsuario: ${data.user.email}`, 'success');
+            } catch (error) {
+                showResult('backend-result', `❌ Error en login: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDashboard() {
+            if (!token) {
+                showResult('protected-result', '❌ Primero debes hacer login', 'error');
+                return;
+            }
+            
+            showResult('protected-result', '⏳ Cargando dashboard...', 'loading');
+            try {
+                const response = await fetch(`${API_URL}/api/v1/dashboard/resumen`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                showResult('protected-result', `✅ Dashboard cargado!\n\n${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                showResult('protected-result', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testProductos() {
+            if (!token) {
+                showResult('protected-result', '❌ Primero debes hacer login', 'error');
+                return;
+            }
+            
+            showResult('protected-result', '⏳ Cargando productos...', 'loading');
+            try {
+                const response = await fetch(`${API_URL}/api/v1/productos/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                showResult('protected-result', `✅ Productos cargados: ${data.length} productos\n\nPrimeros 3:\n${JSON.stringify(data.slice(0, 3), null, 2)}`, 'success');
+            } catch (error) {
+                showResult('protected-result', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showSystemInfo() {
+            const info = {
+                'User Agent': navigator.userAgent,
+                'Idioma': navigator.language,
+                'Online': navigator.onLine,
+                'Token en localStorage': !!localStorage.getItem('access_token'),
+                'URL Actual': window.location.href,
+                'API URL': API_URL,
+                'Cookies habilitadas': navigator.cookieEnabled
+            };
+            
+            const infoText = Object.entries(info).map(([key, value]) => `${key}: ${value}`).join('\n');
+            showResult('system-info', `ℹ️ Información del Sistema:\n\n${infoText}`, 'info');
+        }
+
+        // Auto-mostrar info al cargar
+        window.addEventListener('load', () => {
+            if (token) {
+                showResult('backend-result', '✅ Token encontrado en localStorage', 'success');
+            } else {
+                showResult('backend-result', 'ℹ️ No hay sesión activa. Haz login para probar.', 'info');
+            }
+        });
+    </script>
+</body>
+</html>

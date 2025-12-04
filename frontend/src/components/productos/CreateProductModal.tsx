@@ -113,14 +113,17 @@ export default function CreateProductModal({ isOpen, onClose }: CreateProductMod
     try {
       // Convertir a formato de API
       const payload: CreateProductRequest = {
-        ...data,
+        name: data.name,
+        base_sku: data.base_sku || '',
+        description: data.description,
+        category: data.category,
         variants: data.variants.map(v => ({
-          ...v,
-          // Convertir valores vacíos a undefined
           size_id: v.size_id || undefined,
           color_id: v.color_id || undefined,
           barcode: v.barcode || undefined,
           location_id: v.location_id || undefined,
+          price: v.price,
+          initial_stock: v.initial_stock,
         })),
       };
 

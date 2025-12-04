@@ -78,8 +78,38 @@ export default function Productos() {
   };
 
   const handleBulkExport = () => {
-    console.log('Exporting:', Array.from(selectedIds));
-    // TODO: Implement export
+    const productosSeleccionados = filteredProductos.filter(p => 
+      selectedIds.size === 0 ? true : selectedIds.has(p.product_id)
+    );
+    
+    if (productosSeleccionados.length === 0) {
+      alert('No hay productos para exportar');
+      return;
+    }
+
+    // Crear CSV
+    const csvData = [
+      ['SKU', 'Nombre', 'Categoría', 'Variantes', 'Stock', 'Activo'],
+      ...productosSeleccionados.map(p => [
+        p.base_sku || '',
+        p.name,
+        p.category || '',
+        p.variants?.length || 0,
+        p.variants?.reduce((sum, v) => sum + (v.stock_total || 0), 0) || 0,
+        p.is_active ? 'Sí' : 'No'
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `productos-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    setSelectedIds(new Set());
+    setShowBulkActions(false);
   };
 
   const handleSort = (key: string) => {

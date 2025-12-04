@@ -14,6 +14,7 @@ import {
   Search,
   Tag,
   Gift,
+  Download,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useProductosQuery } from '@/hooks/useProductosQuery';
@@ -146,19 +147,69 @@ export default function Ventas() {
     p.base_sku?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const limpiarVenta = () => {
+    if (cart.length > 0) {
+      if (window.confirm('¿Estás seguro de que deseas limpiar la venta actual?')) {
+        setCart([]);
+        setScanInput('');
+        setSearchQuery('');
+        showSuccess('Venta limpiada');
+      }
+    } else {
+      setCart([]);
+      setScanInput('');
+      setSearchQuery('');
+    }
+  };
+
+  const exportarVentas = () => {
+    showSuccess('Función de exportación en desarrollo');
+    // TODO: Implementar exportación de ventas
+  };
+
   return (
-    <div className="flex h-full bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
-      {/* Panel Izquierdo - Productos */}
-      <div className="flex-1 flex flex-col border-r border-gray-100">
-        {/* Header */}
-        <div className="border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl shadow-sm shadow-gray-200/20">
-          <div className="px-6 py-5">
-            <h2 className="text-lg font-semibold text-gray-900 tracking-tight">
-              Punto de Venta
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">Escanea o busca productos</p>
-          </div>
+    <div className="flex flex-col h-full bg-gradient-to-br from-gray-50/30 via-white/10 to-gray-100/20">
+      {/* Header Superior con Botones */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200/50 shadow-sm">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Ventas / POS</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Sistema de punto de venta</p>
         </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={exportarVentas}
+            className="shadow-sm"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Exportar
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={limpiarVenta}
+            className="shadow-md shadow-primary-500/30"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva Venta
+          </Button>
+        </div>
+      </div>
+
+      {/* Contenedor Principal */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Panel Izquierdo - Productos */}
+        <div className="flex-1 flex flex-col border-r border-gray-100">
+          {/* Header */}
+          <div className="border-b border-gray-200/50 bg-white/85 backdrop-blur-2xl shadow-sm shadow-gray-200/20">
+            <div className="px-6 py-5">
+              <h2 className="text-lg font-semibold text-gray-900 tracking-tight">
+                Punto de Venta
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">Escanea o busca productos</p>
+            </div>
+          </div>
 
         {/* Scanner Input */}
         <div className="p-6 bg-gradient-to-br from-primary-50/30 via-white/20 to-cyan-50/30 border-b border-gray-200/50 backdrop-blur-xl">
@@ -407,6 +458,7 @@ export default function Ventas() {
             </Button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
